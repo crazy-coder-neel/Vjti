@@ -37,7 +37,7 @@ def clinical_predict(text):
     Predict depression, anxiety, and stress probabilities (0.0 to 1.0).
     Uses fine-tuned transformer if available, otherwise heuristic keyword model.
     """
-    source = "groq_fallback_language" if not is_english(text) else "local_model"
+    source = "multilingual_model" if not is_english(text) else "local_model"
 
     if TRANSFORMERS_AVAILABLE and model is not None and tokenizer is not None:
         try:

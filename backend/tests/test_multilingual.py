@@ -75,8 +75,8 @@ def test_multilingual_transcription():
                 })
                 
                 # Display result
-                method_emoji = '🚀' if 'groq' in method else '💻'
-                method_label = 'Groq (Fast)' if 'groq' in method else 'Local Whisper'
+                method_emoji = '🚀' if 'gemini' in method else '💻'
+                method_label = 'Gemini (Cloud)' if 'gemini' in method else 'Local Whisper'
                 
                 print(f"✅ Transcribed successfully")
                 print(f"   🌍 Language: {language_name} ({language})")
@@ -108,15 +108,15 @@ def test_multilingual_transcription():
             lang_name = results[0]['language_name']
             print(f"\n🌍 {lang_name} ({lang}): {len(results)} file(s)")
             for r in results:
-                method_emoji = '🚀' if 'groq' in r['method'] else '💻'
+                method_emoji = '🚀' if 'gemini' in r['method'] else '💻'
                 print(f"   {method_emoji} {r['file']}: \"{r['text'][:60]}...\"")
     
     print("\n" + "="*70)
     print("✅ Multilingual testing complete!")
     print("="*70)
 
-def check_groq_status():
-    """Check if Groq API is enabled"""
+def check_gemini_status():
+    """Check if Gemini API is enabled"""
     try:
         response = requests.get(f"{API_URL}/api/model-info")
         if response.status_code == 200:
@@ -126,33 +126,14 @@ def check_groq_status():
             print("\n" + "="*70)
             print("🔧 TRANSCRIPTION CONFIGURATION")
             print("="*70)
-            
-            if whisper_info.get('groq_enabled'):
-                print("✅ Groq API: ENABLED (10x faster transcription)")
-                print(f"   Model: {whisper_info.get('groq_model', 'whisper-large-v3')}")
-                print(f"   Speed: {whisper_info.get('groq_speed', '2-5 seconds/minute')}")
-            else:
-                print("⚠️  Groq API: DISABLED")
-                print(f"   Note: {whisper_info.get('groq_note', 'Set GROQ_API_KEY for faster transcription')}")
-                print("   Get free API key: https://console.groq.com")
-            
-            print(f"\n💻 Local Whisper: {whisper_info.get('local_model', 'whisper-base')}")
-            print(f"   Languages: {whisper_info.get('languages_supported', '99+')}")
-            print(f"   Speed: {whisper_info.get('speed', '~32 seconds/minute')}")
+            print(f"✅ Cloud Transcription: {whisper_info.get('cloud_transcription', 'Google Gemini')}")
+            print(f"   Model: {whisper_info.get('engine', 'gemini-2.5-flash')}")
+            print(f"   Languages: {whisper_info.get('languages_supported', '100+')}")
             print(f"   Auto-detection: {whisper_info.get('auto_language_detection', True)}")
             
     except Exception as e:
-        print(f"⚠️  Could not check Groq status: {e}")
+        print(f"⚠️  Could not check status: {e}")
 
 if __name__ == "__main__":
-    # Check configuration first
-    check_groq_status()
-    
-    # Run multilingual tests
+    check_gemini_status()
     test_multilingual_transcription()
-    
-    print("\n💡 Tips:")
-    print("   - To enable Groq (10x faster), set GROQ_API_KEY in .env file")
-    print("   - Get free API key from: https://console.groq.com")
-    print("   - Test with different languages to verify accuracy")
-    print("   - See MULTILINGUAL_GUIDE.md for full documentation")

@@ -203,7 +203,7 @@ def run_voice_pipeline(
     Full pipeline for voice/audio input.
 
     Steps:
-      1. Transcribe audio -> text  (Groq Whisper or local Whisper)
+      1. Transcribe audio -> text  (Gemini or local Whisper)
       2. Upload audio file to Supabase Storage
       3. Run clinical text classification
       4. Calculate energy flow & task recommendation

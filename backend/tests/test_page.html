@@ -447,8 +447,8 @@
             const languageName = transcription.language_name || transcription.language || 'Unknown';
             const languageCode = transcription.language || 'unknown';
             const method = transcription.method || 'unknown';
-            const methodEmoji = method.includes('groq') ? '🚀' : '💻';
-            const methodLabel = method.includes('groq') ? 'Groq (Fast)' : 'Local Whisper';
+            const methodEmoji = method.includes('gemini') ? '🚀' : '💻';
+            const methodLabel = method.includes('gemini') ? 'Gemini (Cloud)' : 'Local Whisper';
             
             // Display transcription with language info
             transcriptionDiv.innerHTML = `

@@ -14,7 +14,6 @@ openai-whisper
 soundfile
 pydub
 python-multipart
-groq  # Optional: for 10x faster voice transcription via Groq API
 
 # Optional: for advanced audio processing
 librosa
