@@ -76,7 +76,9 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
         getForecast(effectiveUserId).catch(() => null),
         getGarden(effectiveUserId).catch(() => null),
       ]);
-      if (snapData) setSnapshot(snapData);
+      if (snapData) {
+        setSnapshot(snapData.snapshot || snapData);
+      }
       if (forecastData && forecastData.forecast) {
         setForecast(forecastData.forecast);
       }
@@ -332,12 +334,12 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
               <MetricCard
                 title="Transit Load"
                 value={
-                  snapshot?.factors?.commute_cost
-                    ? `-${snapshot.factors.commute_cost.toFixed(1)} Sp`
+                  (snapshot?.commute_cost ?? snapshot?.factors?.commute_cost)
+                    ? `-${Number(snapshot?.commute_cost ?? snapshot?.factors?.commute_cost).toFixed(1)} Sp`
                     : '0.0 Sp'
                 }
                 unit={
-                  snapshot?.factors?.commute_cost > 0
+                  (snapshot?.commute_cost ?? snapshot?.factors?.commute_cost) > 0
                     ? 'Transit & Crowd'
                     : 'Zero Transit / WFH'
                 }
@@ -347,8 +349,8 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
               <MetricCard
                 title="Campus Load"
                 value={
-                  snapshot?.factors?.campus_cost
-                    ? `-${snapshot.factors.campus_cost.toFixed(1)} Sp`
+                  (snapshot?.campus_cost ?? snapshot?.factors?.campus_cost)
+                    ? `-${Number(snapshot?.campus_cost ?? snapshot?.factors?.campus_cost).toFixed(1)} Sp`
                     : '0.0 Sp'
                 }
                 unit="Lectures & Labs"

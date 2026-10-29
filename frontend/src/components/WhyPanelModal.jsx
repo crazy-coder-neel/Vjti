@@ -41,21 +41,23 @@ export default function WhyPanelModal({ isOpen, onClose, snapshot }) {
   if (!isOpen) return null;
 
   // Extract factors with safe defaults
-  const factors = snapshot?.factors || snapshot?.why_breakdown || {};
-  const liveSpoons = snapshot?.live_spoons ?? snapshot?.prior_spoons ?? 6.0;
-  const rangeText = snapshot?.range_text || `about ${Math.floor(liveSpoons)} to ${Math.ceil(liveSpoons)} spoons`;
+  const rawSnap = snapshot?.snapshot || snapshot || {};
+  const factors = rawSnap?.factors || rawSnap?.why_breakdown || {};
+  const liveSpoons = rawSnap?.live_spoons ?? rawSnap?.prior_spoons ?? rawSnap?.budget ?? 6.0;
+  const rangeText = rawSnap?.range_text || `about ${Math.floor(liveSpoons)} to ${Math.ceil(liveSpoons)} spoons`;
   const explanation =
-    snapshot?.human_explanation ||
+    rawSnap?.human_explanation ||
+    rawSnap?.explanation ||
     factors.human_note ||
     factors.note ||
     'Your budget reflects today\'s transit and campus commitments so you can work comfortably without burnout.';
 
-  const baseCapacity = factors.base_spoons ?? 12.0;
-  const commuteCost = factors.commute_cost ?? factors.commute_deduction ?? 0.0;
-  const campusCost = factors.campus_cost ?? factors.campus_deduction ?? 0.0;
-  const deadlineCost = factors.deadline_cost ?? factors.deadline_deduction ?? 0.0;
-  const carryoverCost = factors.carryover_cost ?? factors.yesterday_debt ?? 0.0;
-  const probeMult = factors.probe_multiplier ?? snapshot?.probe_multiplier ?? 1.0;
+  const baseCapacity = rawSnap?.budget ?? factors.base_spoons ?? 12.0;
+  const commuteCost = Number(rawSnap?.commute_cost ?? factors.commute_cost ?? factors.commute_deduction ?? 0.0);
+  const campusCost = Number(rawSnap?.campus_cost ?? factors.campus_cost ?? factors.campus_deduction ?? 0.0);
+  const deadlineCost = Number(rawSnap?.deadline_pressure ?? factors.deadline_cost ?? factors.deadline_deduction ?? 0.0);
+  const carryoverCost = Number(rawSnap?.carryover ?? factors.carryover_cost ?? factors.yesterday_debt ?? 0.0);
+  const probeMult = Number(rawSnap?.probe_multiplier ?? factors.probe_multiplier ?? 1.0);
 
   return (
     <AnimatePresence>
