@@ -34,18 +34,29 @@ export default function EnergyWeatherBar({
   const todayStr = new Date().toISOString().split('T')[0];
 
   const formatDay = (dateStr) => {
+    if (!dateStr) return '';
     try {
-      const d = new Date(dateStr + 'T00:00:00');
-      return d.toLocaleDateString('en-US', { weekday: 'short' });
+      const parts = String(dateStr).split('T')[0].split('-');
+      if (parts.length === 3) {
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        return d.toLocaleDateString('en-US', { weekday: 'short' });
+      }
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { weekday: 'short' });
     } catch {
-      return dateStr;
+      return '';
     }
   };
 
   const formatDateNum = (dateStr) => {
+    if (!dateStr) return '';
     try {
-      const d = new Date(dateStr + 'T00:00:00');
-      return d.getDate();
+      const parts = String(dateStr).split('T')[0].split('-');
+      if (parts.length === 3) {
+        return parseInt(parts[2], 10);
+      }
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? '' : d.getDate();
     } catch {
       return '';
     }
@@ -71,18 +82,19 @@ export default function EnergyWeatherBar({
       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2.5 overflow-x-auto pb-1">
         {forecast && forecast.length > 0 ? (
           forecast.slice(0, 7).map((day, idx) => {
-            const isToday = day.date === todayStr || idx === 0;
-            const isSelected = selectedDate === day.date;
+            const dayDate = day.date || day.target_date;
+            const isToday = dayDate === todayStr || idx === 0;
+            const isSelected = selectedDate === dayDate;
             const weatherKey = day.weather || 'partly_cloudy';
             const { icon: Icon, color, bg } = weatherIcons[weatherKey] || weatherIcons.partly_cloudy;
-            const spoons = Number(day.prior_spoons ?? day.estimated_spoons ?? 6.0);
+            const spoons = Number(day.prior_spoons ?? day.estimated_spoons ?? day.prior ?? 6.0);
             const driver = day.driver || day.driving_factor || (spoons >= 8 ? 'Light day' : spoons >= 5 ? 'Balanced' : 'High load');
 
             return (
               <motion.div
-                key={day.date || idx}
+                key={dayDate || idx}
                 whileHover={{ y: -2 }}
-                onClick={() => onSelectDate && onSelectDate(day)}
+                onClick={() => onSelectDate && onSelectDate({ ...day, date: dayDate })}
                 className={`relative flex flex-col items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none text-center ${
                   isSelected
                     ? 'bg-violet-600/20 border-violet-500 shadow-md shadow-violet-500/20'
@@ -101,10 +113,10 @@ export default function EnergyWeatherBar({
                 {/* Day Header */}
                 <div className="mt-1">
                   <div className="text-xs font-semibold text-slate-300">
-                    {formatDay(day.date)}
+                    {formatDay(dayDate)}
                   </div>
                   <div className="text-[11px] text-slate-400 font-mono">
-                    {formatDateNum(day.date)}
+                    {formatDateNum(dayDate)}
                   </div>
                 </div>
 
