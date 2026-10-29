@@ -18,6 +18,9 @@ def load_models():
     """Load the voice analysis model and tokenizer"""
     global voice_model, voice_tokenizer, is_transformers_model
     
+    if not os.path.exists(MODEL_PATH) or not os.path.exists(TOKENIZER_PATH):
+        return False
+
     try:
         with open(MODEL_PATH, 'rb') as f:
             voice_model = pickle.load(f)
@@ -39,7 +42,7 @@ def load_models():
         
         return True
     except Exception as e:
-        print(f"❌ Error loading voice analysis models: {str(e)}")
+        # print(f"❌ Error loading voice analysis models: {str(e)}")
         return False
 
 def voice_predict(features):
