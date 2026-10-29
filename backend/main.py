@@ -1122,6 +1122,18 @@ class ExtensionEmailRequest(BaseModel):
     reason_context: str = ""
 
 
+class SendTestEmailRequest(BaseModel):
+    to_email: str = "test@spoonsense.dev"
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    email_type: str = "test_ping"  # "test_ping", "extension_request", "spoon_checkin"
+    student_name: str = "Alex Morgan"
+    course_name: str = "CS301 Systems Engineering"
+    assignment_title: str = "Project Milestone 1"
+    professor_name: str = "Prof. Sharma"
+    proposed_new_date: Optional[str] = None
+
+
 class AddRestBlockRequest(BaseModel):
     user_id: str
     rest_id: Optional[str] = None
@@ -1507,6 +1519,46 @@ async def api_extension_email(request: ExtensionEmailRequest):
         "status": "success",
         "email": email,
         "message": "Email draft ready. Review, edit, and send when you're comfortable.",
+    }
+
+
+# ── Test Email Dispatch Endpoints ──────────────────────────────────────────
+
+@app.post("/api/email/send-test")
+async def api_send_test_email(request: SendTestEmailRequest):
+    """Dispatch or simulate a test email (extension request, check-in, or ping)."""
+    from core.email_service import send_email, send_test_email
+
+    if request.subject and request.body:
+        res = send_email(
+            to_email=request.to_email,
+            subject=request.subject,
+            body=request.body,
+        )
+    else:
+        res = send_test_email(
+            to_email=request.to_email,
+            email_type=request.email_type,
+            student_name=request.student_name,
+            course_name=request.course_name,
+            assignment_title=request.assignment_title,
+            professor_name=request.professor_name,
+            new_due_date=request.proposed_new_date or "2026-11-05",
+        )
+
+    return {
+        "status": "success",
+        "email_delivery": res,
+    }
+
+
+@app.get("/api/email/sent-log")
+async def api_get_email_log(limit: int = 50):
+    """Retrieve history of recently sent / simulated test emails."""
+    from core.email_service import get_sent_email_history
+    return {
+        "status": "success",
+        "emails": get_sent_email_history(limit=limit),
     }
 
 
