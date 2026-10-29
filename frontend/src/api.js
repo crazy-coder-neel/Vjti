@@ -188,6 +188,15 @@ export async function overrideSpoons(userId, spoons, targetDate = null) {
   });
 }
 
+/** Calibrate energy budget from multi-factor inputs (commute, classes, chores, sleep, sensory) */
+export async function calibrateEnergy(data) {
+  return request("/api/user/calibrate-energy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
 /** Parse an ICS calendar string */
 export async function parseICS(icsContent) {
   return request("/api/timetable/ics", {

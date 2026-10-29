@@ -142,6 +142,17 @@ class ManualOverrideRequest(BaseModel):
     spoons: float
     target_date: Optional[str] = None
 
+
+class EnergyCalibrationRequest(BaseModel):
+    user_id: str
+    commute_minutes: int = 30
+    commute_mode: str = "seated"  # "crowded", "seated", "walk", "active", "car", "wfh"
+    campus_hours: float = 3.0
+    has_intense_lab: bool = False
+    chore_hours: float = 1.0
+    sleep_quality: str = "fair"   # "poor", "fair", "rested", "excellent"
+    sensory_load: str = "medium"  # "low", "medium", "high"
+
 class GameResultRequest(BaseModel):
     user_id: str
     game: str = "pulse"  # pulse, switch, pop
@@ -549,6 +560,8 @@ from core.spoon_engine import (
     compute_full_day_snapshot,
     compute_7day_forecast,
     compute_probe_multiplier,
+    compute_commute_cost,
+    compute_campus_cost,
     DEFAULT_BUDGET,
 )
 from core.timetable_parser import (
@@ -567,6 +580,7 @@ _spoonsense_demo_store = {
     "manual_overrides": {}, # user_id -> {date_str: float}
     "baselines": {},        # user_id -> {"baseline_rt": float, "play_count": int}
     "game_results": {},     # user_id -> List[result]
+    "calibrations": {},     # user_id -> calibration_dict
 }
 
 
@@ -894,6 +908,20 @@ async def api_get_today_snapshot(user_id: str, probe_rt: Optional[float] = None,
 
     result_dict = snapshot.to_dict()
 
+    # Apply user calibration if present
+    calib = _spoonsense_demo_store.get("calibrations", {}).get(user_id)
+    if calib:
+        result_dict["commute_cost"] = calib["commute_cost"]
+        result_dict["campus_cost"] = calib["campus_cost"]
+        result_dict["chore_cost"] = calib.get("chore_cost", 0.0)
+        result_dict["live_spoons"] = calib["live_spoons"]
+        result_dict["prior_spoons"] = calib["live_spoons"]
+        result_dict["weather"] = calib["weather"]
+        result_dict["range_text"] = calib["range_text"]
+        result_dict["why_factors"] = calib["why_factors"]
+        result_dict["factors"] = calib["why_factors"]
+        result_dict["calibration_active"] = True
+
     user_overrides = _spoonsense_demo_store["manual_overrides"].get(user_id, {})
     if today.isoformat() in user_overrides:
         result_dict["manual_override"] = user_overrides[today.isoformat()]
@@ -903,6 +931,143 @@ async def api_get_today_snapshot(user_id: str, probe_rt: Optional[float] = None,
         "status": "success",
         "user_id": user_id,
         "snapshot": result_dict,
+    }
+
+
+@app.post("/api/user/calibrate-energy")
+async def api_calibrate_energy(request: EnergyCalibrationRequest):
+    """Calibrate user's daily cognitive spoons from real multi-factor inputs.
+
+    Incorporates:
+      1. Commute transit duration & mode (train, bus, walk, car, wfh)
+      2. Campus lecture & practical lab load
+      3. Life chores & administrative tasks
+      4. Sleep & morning recovery quality
+      5. Sensory & social environment load
+    """
+    user_id = request.user_id
+    base_spoons = 12.0
+
+    # 1. Commute Cost
+    if request.commute_mode == "wfh":
+        commute_cost = 0.0
+    else:
+        commute_cost = round(compute_commute_cost(request.commute_minutes * 2, request.commute_mode), 2)
+
+    # 2. Campus & Lab Cost
+    campus_cost = round(compute_campus_cost(request.campus_hours) + (0.8 if request.has_intense_lab else 0.0), 2)
+
+    # 3. Chores & Life Maintenance Cost
+    chore_cost = round(max(0.0, request.chore_hours * 0.6), 2)
+
+    # 4. Sleep & Recovery Delta
+    sleep_map = {
+        "poor": -1.5,
+        "fair": -0.5,
+        "rested": 0.0,
+        "excellent": 0.5,
+    }
+    sleep_adj = sleep_map.get(request.sleep_quality.lower(), 0.0)
+
+    # 5. Sensory & Social Load Delta
+    sensory_map = {
+        "high": -1.0,
+        "medium": -0.4,
+        "low": 0.0,
+    }
+    sensory_adj = sensory_map.get(request.sensory_load.lower(), 0.0)
+
+    # Net Live Spoons
+    net_spoons = base_spoons - commute_cost - campus_cost - chore_cost + sleep_adj + sensory_adj
+    live_spoons = round(max(1.0, min(12.0, net_spoons)), 1)
+
+    # Determine Weather
+    if live_spoons >= 8.5:
+        weather = "sunny"
+    elif live_spoons >= 6.0:
+        weather = "partly_cloudy"
+    elif live_spoons >= 3.5:
+        weather = "cloudy"
+    else:
+        weather = "stormy"
+
+    range_low = round(max(1.0, live_spoons - 0.7), 1)
+    range_high = round(min(12.0, live_spoons + 0.7), 1)
+    range_text = f"about {range_low} to {range_high} spoons"
+
+    # Human-First Zero-Shame Why Factors
+    why_factors = [
+        {
+            "label": "Starting Budget",
+            "delta": 12.0,
+            "plain_text": "Standard daily cognitive baseline",
+        }
+    ]
+
+    if commute_cost > 0:
+        why_factors.append({
+            "label": "Transit & Commute",
+            "delta": -commute_cost,
+            "plain_text": f"{request.commute_minutes * 2}m daily ({request.commute_mode.title()} transit)",
+        })
+
+    if campus_cost > 0:
+        lab_suffix = " (includes intensive practical lab)" if request.has_intense_lab else ""
+        why_factors.append({
+            "label": "Campus Timetable",
+            "delta": -campus_cost,
+            "plain_text": f"{request.campus_hours}h lectures/labs{lab_suffix}",
+        })
+
+    if chore_cost > 0:
+        why_factors.append({
+            "label": "Life & Chores",
+            "delta": -chore_cost,
+            "plain_text": f"{request.chore_hours}h daily errands, cooking & maintenance",
+        })
+
+    if sleep_adj != 0:
+        why_factors.append({
+            "label": "Sleep Recovery",
+            "delta": sleep_adj,
+            "plain_text": f"{request.sleep_quality.title()} night rest impact",
+        })
+
+    if sensory_adj != 0:
+        why_factors.append({
+            "label": "Sensory Environment",
+            "delta": sensory_adj,
+            "plain_text": f"{request.sensory_load.title()} sensory/social stimulation",
+        })
+
+    calib_record = {
+        "user_id": user_id,
+        "live_spoons": live_spoons,
+        "commute_cost": commute_cost,
+        "campus_cost": campus_cost,
+        "chore_cost": chore_cost,
+        "sleep_adj": sleep_adj,
+        "sensory_adj": sensory_adj,
+        "weather": weather,
+        "range_text": range_text,
+        "why_factors": why_factors,
+        "inputs": request.model_dump(),
+    }
+
+    _spoonsense_demo_store["calibrations"][user_id] = calib_record
+
+    # Update commute profile for future calculations
+    _spoonsense_demo_store["commutes"][user_id] = {
+        "minutes_each_way": request.commute_minutes,
+        "mode": request.commute_mode,
+        "days_applicable": [0, 1, 2, 3, 4],
+    }
+
+    return {
+        "status": "success",
+        "user_id": user_id,
+        "calibration": calib_record,
+        "message": f"Energy calibrated to {live_spoons} spoons based on your real daily demands.",
     }
 
 

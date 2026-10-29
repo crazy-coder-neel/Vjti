@@ -20,6 +20,7 @@ import EveningCheckinModal from './components/EveningCheckinModal';
 import DopamineMenuModal from './components/DopamineMenuModal';
 import ExtensionEmailModal from './components/ExtensionEmailModal';
 import TaskShrinkerModal from './components/TaskShrinkerModal';
+import EnergyCalibrationModal from './components/EnergyCalibrationModal';
 import { getTodaySnapshot, getForecast, overrideSpoons, getGarden, seedDemoProfile } from './api';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -30,7 +31,7 @@ import Settings from './pages/Settings';
 import PrivacyPage from './pages/PrivacyPage';
 import LandingPage from './pages/LandingPage';
 import { supabase, enableAutoRefresh } from './supabaseClient';
-import { Zap, Menu, Bell, LogOut, Settings as SettingsIcon, User, Search, Coffee, Moon } from 'lucide-react';
+import { Zap, Menu, Bell, LogOut, Settings as SettingsIcon, User, Search, Coffee, Moon, Sliders } from 'lucide-react';
 
 const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, userEmail, userId }) => {
   const [isSidebarOpen, setSidebarOpen] = useState(true);
@@ -41,6 +42,7 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
   const [forecast, setForecast] = useState([]);
   const [garden, setGarden] = useState(null);
   const [isPulseOpen, setIsPulseOpen] = useState(false);
+  const [isCalibrationOpen, setIsCalibrationOpen] = useState(false);
   const [isWhyOpen, setIsWhyOpen] = useState(false);
   const [isEveningOpen, setIsEveningOpen] = useState(false);
   const [isDopamineOpen, setIsDopamineOpen] = useState(false);
@@ -279,9 +281,18 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
                   <button
                     onClick={() => setIsPulseOpen(true)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-600/20 border border-violet-500/30 text-violet-300 hover:bg-violet-600/30 transition-all text-xs font-semibold shadow-sm"
+                    title="20-second psychomotor attention probe game"
                   >
                     <Zap className="w-3.5 h-3.5 text-violet-400 animate-pulse" />
                     <span>20s Pulse</span>
+                  </button>
+                  <button
+                    onClick={() => setIsCalibrationOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 text-amber-300 hover:from-amber-500/30 hover:to-orange-500/30 transition-all text-xs font-bold shadow-sm"
+                    title="Calibrate your energy budget with real commute, classes, chores, and sleep"
+                  >
+                    <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                    <span>⚡ Calibrate Energy</span>
                   </button>
                 </div>
               </div>
@@ -549,6 +560,13 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
             isOpen={isWhyOpen}
             onClose={() => setIsWhyOpen(false)}
             snapshot={selectedForecastDay || snapshot}
+          />
+
+          <EnergyCalibrationModal
+            isOpen={isCalibrationOpen}
+            onClose={() => setIsCalibrationOpen(false)}
+            userId={userId || 'demo_student'}
+            onCalibrationSuccess={fetchSpoonData}
           />
 
           <EveningCheckinModal
