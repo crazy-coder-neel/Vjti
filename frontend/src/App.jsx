@@ -21,6 +21,7 @@ import DopamineMenuModal from './components/DopamineMenuModal';
 import ExtensionEmailModal from './components/ExtensionEmailModal';
 import TaskShrinkerModal from './components/TaskShrinkerModal';
 import EnergyCalibrationModal from './components/EnergyCalibrationModal';
+import AzureAvatarModal from './components/AzureAvatarModal';
 import { getTodaySnapshot, getForecast, overrideSpoons, getGarden, seedDemoProfile } from './api';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -32,7 +33,7 @@ import Settings from './pages/Settings';
 import PrivacyPage from './pages/PrivacyPage';
 import LandingPage from './pages/LandingPage';
 import { supabase, enableAutoRefresh } from './supabaseClient';
-import { Zap, Menu, Bell, LogOut, Settings as SettingsIcon, User, Search, Coffee, Moon, Sliders } from 'lucide-react';
+import { Zap, Menu, Bell, LogOut, Settings as SettingsIcon, User, Search, Coffee, Moon, Sliders, Video } from 'lucide-react';
 
 const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, userEmail, userId, userCollege, userMajor }) => {
   const [isSidebarOpen, setSidebarOpen] = useState(true);
@@ -43,6 +44,7 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
   const [forecast, setForecast] = useState([]);
   const [garden, setGarden] = useState(null);
   const [isPulseOpen, setIsPulseOpen] = useState(false);
+  const [isAvatarOpen, setIsAvatarOpen] = useState(false);
   const [isCalibrationOpen, setIsCalibrationOpen] = useState(false);
   const [isWhyOpen, setIsWhyOpen] = useState(false);
   const [isEveningOpen, setIsEveningOpen] = useState(false);
@@ -246,6 +248,14 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
                 </button>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsAvatarOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white transition-all text-xs font-semibold shadow-md shadow-violet-600/30"
+                    title="Real-Time Talking Avatar Study Companion"
+                  >
+                    <Video className="w-3.5 h-3.5 text-white" />
+                    <span>AI Avatar</span>
+                  </button>
                   <button
                     onClick={() => setIsDopamineOpen(true)}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 transition-all text-xs font-semibold shadow-sm"
@@ -530,6 +540,13 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
             onClose={() => setIsPulseOpen(false)}
             userId={userId || 'demo_student'}
             onComplete={handleGameCompleted}
+          />
+
+          <AzureAvatarModal
+            isOpen={isAvatarOpen}
+            onClose={() => setIsAvatarOpen(false)}
+            userId={userId || 'demo_student'}
+            snapshot={snapshot}
           />
 
           <WhyPanelModal
