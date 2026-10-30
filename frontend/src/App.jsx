@@ -398,7 +398,7 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
 
               <div className="hidden lg:block h-full">
                 <div className="bg-slate-800/40 border border-white/[0.06] rounded-2xl h-full relative overflow-hidden">
-                  <ReasoningPanel isOpen={isReasoningOpen} setOpen={setReasoningOpen} />
+                  <ReasoningPanel isOpen={isReasoningOpen} setOpen={setReasoningOpen} snapshot={snap} />
                 </div>
               </div>
             </div>

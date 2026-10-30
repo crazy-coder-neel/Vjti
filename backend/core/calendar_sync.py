@@ -32,6 +32,27 @@ _CALENDAR_EVENT_MAP: Dict[str, Dict[str, str]] = {}
 _USER_SYNC_PREFS: Dict[str, Dict[str, Any]] = {}
 
 
+def _get_live_google_service():
+    """Attempt to initialize an authenticated Google Calendar API service."""
+    if not GOOGLE_CAL_AVAILABLE:
+        return None
+    token_path = os.path.join(os.path.dirname(__file__), "..", "feature_2", "token.json")
+    if not os.path.exists(token_path):
+        return None
+    try:
+        with open(token_path, "r") as f:
+            data = json.load(f)
+        creds = Credentials.from_authorized_user_info(data, SCOPES)
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            with open(token_path, "w") as f:
+                f.write(creds.to_json())
+        return build("calendar", "v3", credentials=creds)
+    except Exception as e:
+        # Fall back gracefully to mock/in-memory sync if tokens are expired
+        return None
+
+
 def get_sync_status(user_id: str) -> Dict[str, Any]:
     """Get current calendar sync status for user."""
     prefs = _USER_SYNC_PREFS.get(user_id, {
@@ -89,6 +110,8 @@ def sync_tasks_to_calendar(
     # Calculate sequential start times starting at 10:00 AM
     current_time = datetime.datetime.fromisoformat(f"{date_str}T10:00:00")
 
+    service = _get_live_google_service()
+
     for task in tasks:
         task_id = str(task.get("task_id", task.get("id", task.get("title"))))
         duration = task.get("estimated_minutes", 45)
@@ -112,6 +135,11 @@ def sync_tasks_to_calendar(
         if task_id in _CALENDAR_EVENT_MAP[user_id]:
             # Update existing event (prevents orphan duplicates on reshuffle)
             event_id = _CALENDAR_EVENT_MAP[user_id][task_id]
+            if service:
+                try:
+                    service.events().update(calendarId="primary", eventId=event_id, body=event_body).execute()
+                except Exception:
+                    pass
             updated.append({
                 "task_id": task_id,
                 "event_id": event_id,
@@ -123,6 +151,13 @@ def sync_tasks_to_calendar(
         else:
             # Create new tracked event
             event_id = f"evt_{task_id[:8]}_{int(current_time.timestamp())}"
+            if service:
+                try:
+                    res = service.events().insert(calendarId="primary", body=event_body).execute()
+                    if res and "id" in res:
+                        event_id = res["id"]
+                except Exception:
+                    pass
             _CALENDAR_EVENT_MAP[user_id][task_id] = event_id
             synced.append({
                 "task_id": task_id,

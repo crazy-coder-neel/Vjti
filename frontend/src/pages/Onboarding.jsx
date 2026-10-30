@@ -754,18 +754,21 @@ export default function Onboarding({ userEmail, userId, onComplete }) {
                     <div className="p-3.5 rounded-2xl bg-slate-800/40 border border-white/5 space-y-2">
                       <span className="text-xs font-semibold text-indigo-300 flex items-center gap-1.5">
                         <Bed className="w-3.5 h-3.5 text-indigo-400" />
-                        Average Sleep Quality
+                        Average Sleep Duration & Quality
                       </span>
                       <select
                         value={sleepQuality}
                         onChange={(e) => setSleepQuality(e.target.value)}
                         className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500/50"
                       >
-                        <option value="poor">😫 Poor / Frequent Insomnia (-1.5 Sp)</option>
-                        <option value="fair">😐 Fair / Average (-0.5 Sp)</option>
-                        <option value="rested">😊 Rested & Consistent (Normal)</option>
-                        <option value="excellent">⚡ High Sleep Recovery (+0.5 Sp)</option>
+                        <option value="poor">😫 Less than 5 hours (Poor / Broken sleep)</option>
+                        <option value="fair">😐 5 to 6.5 hours (Average night)</option>
+                        <option value="rested">😊 7 to 8 hours (Healthy rest)</option>
+                        <option value="excellent">⚡ 8+ hours (Deep recovery sleep)</option>
                       </select>
+                      <span className="text-[10px] text-slate-400 block">
+                        We map your actual sleep hours internally to baseline brain energy.
+                      </span>
                     </div>
 
                     <div className="p-3.5 rounded-2xl bg-slate-800/40 border border-white/5 space-y-2">

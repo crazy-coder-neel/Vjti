@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Layers,
   ArrowRight,
+  Send,
 } from 'lucide-react';
 import {
   getTasks,
@@ -22,6 +23,7 @@ import {
   addRestBlock,
   planToday,
   reshufflePlan,
+  syncCalendar,
 } from '../api';
 
 /**
@@ -48,6 +50,7 @@ export default function TaskPlanner({
   const [isLoading, setIsLoading] = useState(true);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [isReshuffling, setIsReshuffling] = useState(false);
+  const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
   const [reshuffleToast, setReshuffleToast] = useState(null);
 
   // New task form state
@@ -150,6 +153,22 @@ export default function TaskPlanner({
     }
   };
 
+  const handleSyncToCalendar = async () => {
+    setIsSyncingCalendar(true);
+    try {
+      const res = await syncCalendar(userId, tasks);
+      setReshuffleToast(
+        res?.message || 'Daily schedule synced to Google Calendar as [SpoonSense] blocks!'
+      );
+    } catch (err) {
+      console.error('Calendar sync error:', err);
+      setReshuffleToast('Failed to sync to Google Calendar. Check connection.');
+    } finally {
+      setIsSyncingCalendar(false);
+      setTimeout(() => setReshuffleToast(null), 6000);
+    }
+  };
+
   const liveSpoons = snapshot?.live_spoons ?? snapshot?.prior_spoons ?? 6.0;
   const plannableCapacity = todayPlan?.planned_capacity ?? (liveSpoons * 0.8).toFixed(1);
   const reservedBuffer = todayPlan?.reserved_spoons ?? (liveSpoons * 0.2).toFixed(1);
@@ -216,6 +235,17 @@ export default function TaskPlanner({
             >
               <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${isReshuffling ? 'animate-spin' : ''}`} />
               <span>Auto-Reshuffle</span>
+            </button>
+
+            {/* Sync to Google Calendar Button */}
+            <button
+              onClick={handleSyncToCalendar}
+              disabled={isSyncingCalendar}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-300 hover:bg-sky-500/25 transition-all text-xs font-medium"
+              title="Sync your capacity-protected schedule to Google Calendar"
+            >
+              <Calendar className={`w-3.5 h-3.5 text-sky-400 ${isSyncingCalendar ? 'animate-spin' : ''}`} />
+              <span>{isSyncingCalendar ? 'Syncing...' : 'Sync to GCal'}</span>
             </button>
 
             {/* Add Task Button */}

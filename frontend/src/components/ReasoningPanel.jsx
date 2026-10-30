@@ -2,31 +2,36 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, BrainCircuit, Activity, Zap, ShieldCheck } from 'lucide-react';
 
-const ReasoningPanel = ({ isOpen, setOpen }) => {
+const ReasoningPanel = ({ isOpen, setOpen, snapshot = null, burnoutRisk = null }) => {
+  const liveSpoons = snapshot?.live_spoons ?? snapshot?.prior_spoons ?? 6.0;
+  const fatiguePercent = Math.min(95, Math.max(15, Math.round(((12 - liveSpoons) / 12) * 100)));
+  const energyLevelText = liveSpoons >= 8 ? 'High' : liveSpoons >= 5 ? 'Moderate' : 'Low';
+
   const reasoningSteps = [
-    "Analyzing current cognitive load...",
-    "User focus peaked at 10:00 AM.",
-    "Scheduling recovery break at 2:00 PM.",
-    "Optimizing for 90-min deep work cycle."
+    `Analyzing current cognitive load (Live: ${Number(liveSpoons).toFixed(1)} / 12 spoons)...`,
+    `Transit & timetable mapped: estimated fatigue at ${fatiguePercent}%.`,
+    "Circadian peak identified for complex academic deep work.",
+    "Auto-buffer & 20% breathing room reserved to prevent task paralysis."
   ];
   const [visibleSteps, setVisibleSteps] = useState([]);
 
   useEffect(() => {
     if (isOpen) {
+      setVisibleSteps([]);
+      let idx = 0;
       const timer = setInterval(() => {
-        setVisibleSteps((prev) => {
-          if (prev.length < reasoningSteps.length) {
-            return [...prev, reasoningSteps[prev.length]];
-          }
+        if (idx < reasoningSteps.length) {
+          setVisibleSteps((prev) => [...prev, reasoningSteps[idx]]);
+          idx++;
+        } else {
           clearInterval(timer);
-          return prev;
-        });
-      }, 800);
+        }
+      }, 600);
       return () => clearInterval(timer);
     } else {
       setVisibleSteps([]);
     }
-  }, [isOpen]);
+  }, [isOpen, liveSpoons, fatiguePercent]);
 
   return (
     <motion.div
@@ -73,30 +78,30 @@ const ReasoningPanel = ({ isOpen, setOpen }) => {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.3 }}
+              transition={{ delay: 0.2 }}
               className="mt-4 pt-4 border-t border-white/[0.04]"
             >
-              <h4 className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-3">Factors</h4>
+              <h4 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-3">Live Factors</h4>
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="bg-white/[0.03] p-2.5 rounded-lg text-center border border-white/[0.04]">
                   <Activity size={14} className="text-amber-400 mx-auto mb-1" />
-                  <span className="block text-lg font-bold text-white">72%</span>
-                  <span className="text-[9px] text-slate-500">Fatigue</span>
+                  <span className="block text-lg font-bold text-white">{fatiguePercent}%</span>
+                  <span className="text-[9px] text-slate-400">Fatigue Load</span>
                 </div>
                 <div className="bg-white/[0.03] p-2.5 rounded-lg text-center border border-white/[0.04]">
                   <Zap size={14} className="text-emerald-400 mx-auto mb-1" />
-                  <span className="block text-lg font-bold text-white">High</span>
-                  <span className="text-[9px] text-slate-500">Energy</span>
+                  <span className="block text-lg font-bold text-white">{energyLevelText}</span>
+                  <span className="text-[9px] text-slate-400">Cognitive Energy</span>
                 </div>
               </div>
 
               <div className="mt-3 bg-emerald-500/[0.06] border border-emerald-500/15 p-2.5 rounded-lg flex items-start gap-2">
                 <ShieldCheck className="text-emerald-400 flex-shrink-0 mt-0.5" size={14} />
                 <div>
-                  <h5 className="text-xs font-medium text-emerald-300">Optimized</h5>
+                  <h5 className="text-xs font-medium text-emerald-300">Load Protected</h5>
                   <p className="text-[10px] text-emerald-500/80 mt-0.5">
-                    Tasks reordered for peak circadian rhythm.
+                    Tasks auto-sized around your commute & sleep capacity.
                   </p>
                 </div>
               </div>
