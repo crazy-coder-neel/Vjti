@@ -254,7 +254,7 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
                     title="Real-Time Talking Avatar Study Companion"
                   >
                     <Video className="w-3.5 h-3.5 text-white" />
-                    <span>AI Avatar</span>
+                    <span>AI Buddy (Celine)</span>
                   </button>
                   <button
                     onClick={() => setIsDopamineOpen(true)}
@@ -408,7 +408,7 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
 
               <div className="hidden lg:block h-full">
                 <div className="bg-slate-800/40 border border-white/[0.06] rounded-2xl h-full relative overflow-hidden">
-                  <ReasoningPanel isOpen={isReasoningOpen} setOpen={setReasoningOpen} snapshot={snap} />
+                  <ReasoningPanel isOpen={isReasoningOpen} setOpen={setReasoningOpen} snapshot={snapshot} />
                 </div>
               </div>
             </div>
@@ -476,6 +476,17 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
           </div>
 
           <div className="flex items-center gap-2">
+            {/* AI Avatar Companion Quick Trigger */}
+            <button
+              onClick={() => setIsAvatarOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white text-xs font-semibold shadow-md shadow-violet-600/30 transition-all border border-violet-400/30 cursor-pointer"
+              title="Talk to your AI Study Buddy (Celine)"
+            >
+              <Video size={13} className="text-violet-200" />
+              <span>AI Buddy (Celine)</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            </button>
+
             {/* Search */}
             <button className="p-2.5 hover:bg-white/[0.04] rounded-xl text-slate-400 hover:text-white transition-colors">
               <Search size={17} />
@@ -533,6 +544,19 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
 
         <div className="flex-1 overflow-y-auto p-6 scrollbar-hide relative bg-[#0a0e1a]">
           {renderContent()}
+
+          {/* Floating AI Buddy Launcher */}
+          <button
+            onClick={() => setIsAvatarOpen(true)}
+            className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-600 text-white font-semibold text-xs shadow-2xl shadow-violet-600/50 border border-white/20 hover:scale-105 active:scale-95 transition-all cursor-pointer group"
+            title="Open AI Companion Celine"
+          >
+            <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+              <Video size={12} className="text-white group-hover:rotate-12 transition-transform" />
+            </div>
+            <span>Talk to Celine</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          </button>
 
           {/* SpoonSense Global Modals */}
           <PulseGameModal
