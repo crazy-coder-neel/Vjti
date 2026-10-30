@@ -24,6 +24,7 @@ import EnergyCalibrationModal from './components/EnergyCalibrationModal';
 import { getTodaySnapshot, getForecast, overrideSpoons, getGarden, seedDemoProfile } from './api';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import Onboarding from './pages/Onboarding';
 import DeepWorkMode from './pages/DeepWorkMode';
 import CognitiveInsights from './pages/CognitiveInsights';
 import RecoveryCycles from './pages/RecoveryCycles';
@@ -33,7 +34,7 @@ import LandingPage from './pages/LandingPage';
 import { supabase, enableAutoRefresh } from './supabaseClient';
 import { Zap, Menu, Bell, LogOut, Settings as SettingsIcon, User, Search, Coffee, Moon, Sliders } from 'lucide-react';
 
-const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, userEmail, userId }) => {
+const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, userEmail, userId, userCollege, userMajor }) => {
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [isReasoningOpen, setReasoningOpen] = useState(true);
@@ -209,62 +210,45 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
       case '/dashboard':
         return (
           <div className="max-w-[1400px] mx-auto space-y-6 pb-20 animate-in fade-in duration-500">
-            {/* Welcome Banner & Demo Persona Switcher (FEAT-A3) */}
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 p-4 rounded-2xl bg-slate-900/40 border border-white/[0.06]">
+            {/* Welcome Banner & Student Identity (Multi-User & Personalized) */}
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 p-5 rounded-3xl bg-slate-900/60 border border-white/[0.08] backdrop-blur-xl shadow-xl">
               <div>
                 <div className="flex items-center gap-3">
-                  <h2 className="text-2xl font-semibold text-white">
-                    {getGreeting()}, <span className="text-emerald-400">{activePersona === 'aarav' ? 'Aarav Sharma' : activePersona === 'meera' ? 'Meera Patel' : userName || 'User'}</span>
+                  <h2 className="text-2xl font-bold text-white tracking-tight">
+                    {getGreeting()}, <span className="text-emerald-400">{userName || 'Student'}</span>
                   </h2>
-                  {activePersona !== 'demo' && (
-                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
-                      {activePersona} Profile Active
-                    </span>
-                  )}
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    Active Student Profile
+                  </span>
                 </div>
-                <p className="text-slate-400 text-sm mt-1">
-                  {activePersona === 'aarav'
-                    ? "Heavy Commute Student: 240m daily crowded transit + 9h campus -> 2.4 Spoons (Stormy Weather)."
-                    : activePersona === 'meera'
-                    ? "Walk-to-Campus Student: 20m daily walk + 9h campus -> 7.4 Spoons (Sunny Weather)."
-                    : "Load-aware cognitive capacity & timetable rhythm with 12-spoon daily budget."}
+                <p className="text-slate-400 text-xs sm:text-sm mt-1 flex flex-wrap items-center gap-2">
+                  <span>{userCollege || 'VJTI Mumbai'}</span>
+                  {userMajor && (
+                    <>
+                      <span className="text-slate-600">•</span>
+                      <span className="text-slate-300">{userMajor}</span>
+                    </>
+                  )}
+                  <span className="text-slate-600">•</span>
+                  <span className="text-violet-300">Personalized 12-Spoon Energy Rhythm</span>
                 </p>
               </div>
 
-              {/* Persona Switcher Buttons for Hackathon Demo */}
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-800/80 border border-white/10 text-xs">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 px-1.5">Preset:</span>
-                  <button
-                    onClick={() => handleSwitchPersona('aarav')}
-                    disabled={personaLoading}
-                    className={`px-2.5 py-1 rounded-lg font-medium transition-all text-xs flex items-center gap-1.5 ${
-                      activePersona === 'aarav'
-                        ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40 font-semibold shadow-sm'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                    title="Aarav: 4hr daily transit -> 2.4 spoons, Stormy"
-                  >
-                    <span>🚆 Aarav (4h Transit)</span>
-                  </button>
-                  <button
-                    onClick={() => handleSwitchPersona('meera')}
-                    disabled={personaLoading}
-                    className={`px-2.5 py-1 rounded-lg font-medium transition-all text-xs flex items-center gap-1.5 ${
-                      activePersona === 'meera'
-                        ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 font-semibold shadow-sm'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                    title="Meera: 10min walk -> 7.4 spoons, Sunny"
-                  >
-                    <span>🚶 Meera (Walk)</span>
-                  </button>
-                </div>
+              {/* Action Buttons & Schedule Controls */}
+              <div className="flex flex-wrap items-center gap-2.5">
+                <button
+                  onClick={() => setIsCalibrationOpen(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 text-violet-200 transition-all text-xs font-semibold shadow-sm"
+                  title="Update your daily commute, classes, chores, or sleep settings"
+                >
+                  <Sliders className="w-3.5 h-3.5 text-violet-400" />
+                  <span>Update My Schedule & Commute</span>
+                </button>
 
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setIsDopamineOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 transition-all text-xs font-semibold shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 transition-all text-xs font-semibold shadow-sm"
                     title="Low-friction micro-activities off-ramp"
                   >
                     <Coffee className="w-3.5 h-3.5 text-amber-400" />
@@ -272,7 +256,7 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
                   </button>
                   <button
                     onClick={() => setIsEveningOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300 hover:bg-purple-500/25 transition-all text-xs font-semibold shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300 hover:bg-purple-500/25 transition-all text-xs font-semibold shadow-sm"
                     title="One-tap 10s evening check-in"
                   >
                     <Moon className="w-3.5 h-3.5 text-purple-400" />
@@ -280,19 +264,11 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
                   </button>
                   <button
                     onClick={() => setIsPulseOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-600/20 border border-violet-500/30 text-violet-300 hover:bg-violet-600/30 transition-all text-xs font-semibold shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-600/30 transition-all text-xs font-semibold shadow-sm"
                     title="20-second psychomotor attention probe game"
                   >
-                    <Zap className="w-3.5 h-3.5 text-violet-400 animate-pulse" />
+                    <Zap className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
                     <span>20s Pulse</span>
-                  </button>
-                  <button
-                    onClick={() => setIsCalibrationOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 text-amber-300 hover:from-amber-500/30 hover:to-orange-500/30 transition-all text-xs font-bold shadow-sm"
-                    title="Calibrate your energy budget with real commute, classes, chores, and sleep"
-                  >
-                    <Sliders className="w-3.5 h-3.5 text-amber-400" />
-                    <span>⚡ Calibrate Energy</span>
                   </button>
                 </div>
               </div>
@@ -607,8 +583,11 @@ const DashboardLayout = ({ theme, userRole, energyLevel, metrics, userName, user
 const App = () => {
   const [session, setSession] = useState(null);
   const [userRole, setUserRole] = useState('student');
-  const [userName, setUserName] = useState('User');
+  const [userName, setUserName] = useState('Student');
   const [userEmail, setUserEmail] = useState('');
+  const [userCollege, setUserCollege] = useState('');
+  const [userMajor, setUserMajor] = useState('');
+  const [isOnboarded, setIsOnboarded] = useState(true);
   const [energyLevel, setEnergyLevel] = useState(72);
   const [metrics, setMetrics] = useState({
     stress: { value: 'Low', unit: 'Score', type: 'success' },
@@ -678,16 +657,28 @@ const App = () => {
         .from('users_profile')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (data) {
-        setUserName(data.full_name || 'User');
+        setUserName(data.full_name || 'Student');
         setUserRole(data.role || 'student');
+        setUserCollege(data.college || '');
+        setUserMajor(data.major || '');
         if (data.email) setUserEmail(data.email);
+        setIsOnboarded(Boolean(data.is_onboarded));
+      } else {
+        setIsOnboarded(false);
       }
     } catch (e) {
       console.error("Profile fetch error:", e);
     }
+  };
+
+  const handleOnboardingComplete = (res) => {
+    setIsOnboarded(true);
+    if (res?.profile?.full_name) setUserName(res.profile.full_name);
+    if (res?.profile?.college) setUserCollege(res.profile.college);
+    if (res?.profile?.major) setUserMajor(res.profile.major);
   };
 
   // Dashboard Data Listener (from ChatInput/Backend)
@@ -764,7 +755,17 @@ const App = () => {
     return <div className="h-screen w-screen bg-[#0a0e1a] flex items-center justify-center text-emerald-400">Loading NeuroMind...</div>;
   }
 
-  const layoutProps = { theme: 'dark', userRole, energyLevel, metrics, userName, userEmail, userId: session?.user?.id || null };
+  const layoutProps = {
+    theme: 'dark',
+    userRole,
+    energyLevel,
+    metrics,
+    userName,
+    userEmail,
+    userId: session?.user?.id || null,
+    userCollege,
+    userMajor,
+  };
 
   return (
     <Routes>
@@ -772,16 +773,77 @@ const App = () => {
       <Route path="/login" element={<Login onLoginSuccess={handleLoginSuccess} />} />
       <Route path="/signup" element={<Signup />} />
 
+      {/* Interactive First-Time Student Onboarding Flow */}
+      <Route
+        path="/onboarding"
+        element={
+          session ? (
+            <Onboarding
+              userEmail={userEmail}
+              userId={session.user.id}
+              onComplete={handleOnboardingComplete}
+            />
+          ) : (
+            <Navigate to="/login" />
+          )
+        }
+      />
+
       {/* Deep Work Mode - Standalone Page (accessible without auth, handles anonymous internally) */}
       <Route path="/deep-work" element={<DeepWorkMode />} />
 
-      {/* Dashboard Routes with Layout */}
-      <Route path="/dashboard" element={session ? <DashboardLayout {...layoutProps} /> : <Navigate to="/login" />} />
-      <Route path="/tasks" element={session ? <DashboardLayout {...layoutProps} /> : <Navigate to="/login" />} />
-      <Route path="/insights" element={session ? <DashboardLayout {...layoutProps} /> : <Navigate to="/login" />} />
-      <Route path="/recovery" element={session ? <DashboardLayout {...layoutProps} /> : <Navigate to="/login" />} />
+      {/* Dashboard Routes with Layout — Redirects to /onboarding if first-time user */}
+      <Route
+        path="/dashboard"
+        element={
+          session ? (
+            !isOnboarded ? <Navigate to="/onboarding" /> : <DashboardLayout {...layoutProps} />
+          ) : (
+            <Navigate to="/login" />
+          )
+        }
+      />
+      <Route
+        path="/tasks"
+        element={
+          session ? (
+            !isOnboarded ? <Navigate to="/onboarding" /> : <DashboardLayout {...layoutProps} />
+          ) : (
+            <Navigate to="/login" />
+          )
+        }
+      />
+      <Route
+        path="/insights"
+        element={
+          session ? (
+            !isOnboarded ? <Navigate to="/onboarding" /> : <DashboardLayout {...layoutProps} />
+          ) : (
+            <Navigate to="/login" />
+          )
+        }
+      />
+      <Route
+        path="/recovery"
+        element={
+          session ? (
+            !isOnboarded ? <Navigate to="/onboarding" /> : <DashboardLayout {...layoutProps} />
+          ) : (
+            <Navigate to="/login" />
+          )
+        }
+      />
       {/* Settings & Privacy Pages */}
-      <Route path="/settings" element={session ? <DashboardLayout {...layoutProps} /> : <Navigate to="/login" />} />
+      <Route
+        path="/settings"
+        element={
+          session ? (
+            !isOnboarded ? <Navigate to="/onboarding" /> : <DashboardLayout {...layoutProps} />
+          ) : (
+            <Navigate to="/login" />
+          )
+        }
+      />
       <Route path="/privacy" element={<PrivacyPage />} />
 
       {/* Fallback */}

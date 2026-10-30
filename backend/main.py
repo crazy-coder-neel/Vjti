@@ -153,6 +153,21 @@ class EnergyCalibrationRequest(BaseModel):
     sleep_quality: str = "fair"   # "poor", "fair", "rested", "excellent"
     sensory_load: str = "medium"  # "low", "medium", "high"
 
+
+class OnboardingRequest(BaseModel):
+    user_id: str
+    full_name: str
+    college: Optional[str] = "VJTI Mumbai"
+    major: Optional[str] = "Engineering"
+    chronotype: str = "intermediate"  # "morning", "intermediate", "evening"
+    commute_minutes: int = 30
+    commute_mode: str = "seated"
+    campus_hours: float = 4.0
+    has_intense_lab: bool = False
+    chore_hours: float = 1.0
+    sleep_quality: str = "fair"
+    sensory_load: str = "medium"
+
 class GameResultRequest(BaseModel):
     user_id: str
     game: str = "pulse"  # pulse, switch, pop
@@ -407,6 +422,78 @@ async def update_profile(request: ProfileUpdateRequest):
     if result["status"] == "error":
         raise HTTPException(status_code=400, detail=result["error"])
     return result
+
+
+@app.post("/api/user/onboarding")
+async def api_user_onboarding(request: OnboardingRequest):
+    """Complete personalized first-time onboarding for a student.
+
+    Persists their academic identity, commute, campus load, and baseline rhythm,
+    then automatically calculates their custom starting spoon capacity.
+    """
+    user_id = request.user_id
+
+    # 1. Update users_profile in Supabase / Local
+    profile_updates = {
+        "full_name": request.full_name,
+        "college": request.college or "",
+        "major": request.major or "",
+        "chronotype": request.chronotype,
+        "is_onboarded": True,
+        "default_commute_mins": request.commute_minutes,
+        "default_commute_mode": request.commute_mode,
+        "typical_campus_hours": request.campus_hours,
+        "typical_chore_hours": request.chore_hours,
+        "typical_sleep_quality": request.sleep_quality,
+        "sensory_sensitivity": request.sensory_load,
+    }
+
+    try:
+        if supabase:
+            supabase.table("users_profile").upsert(
+                {"id": user_id, **profile_updates}, on_conflict="id"
+            ).execute()
+    except Exception as e:
+        print(f"[spoonsense] DB error in onboarding profile upsert: {e}")
+
+    # 2. Persist commute profile
+    commute_payload = {
+        "user_id": user_id,
+        "minutes_each_way": request.commute_minutes,
+        "mode": request.commute_mode,
+        "days_applicable": [0, 1, 2, 3, 4],
+    }
+    _spoonsense_demo_store["commutes"][user_id] = commute_payload
+
+    try:
+        if supabase:
+            supabase.table("commute_profiles").upsert(
+                commute_payload, on_conflict="user_id"
+            ).execute()
+    except Exception as e:
+        print(f"[spoonsense] DB error in onboarding commute upsert: {e}")
+
+    # 3. Compute personalized energy calibration
+    calib_req = EnergyCalibrationRequest(
+        user_id=user_id,
+        commute_minutes=request.commute_minutes,
+        commute_mode=request.commute_mode,
+        campus_hours=request.campus_hours,
+        has_intense_lab=request.has_intense_lab,
+        chore_hours=request.chore_hours,
+        sleep_quality=request.sleep_quality,
+        sensory_load=request.sensory_load,
+    )
+    calib_res = await api_calibrate_energy(calib_req)
+
+    return {
+        "status": "success",
+        "user_id": user_id,
+        "is_onboarded": True,
+        "profile": profile_updates,
+        "calibration": calib_res["calibration"],
+        "message": f"Welcome, {request.full_name}! Your cognitive workspace is calibrated to {calib_res['calibration']['live_spoons']} spoons.",
+    }
 
 
 # ============================================

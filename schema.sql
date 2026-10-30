@@ -34,13 +34,35 @@ COMMENT ON FUNCTION public.spoonsense_set_updated_at()
 -- 1. users_profile — Student profiles mirrored from Supabase Auth
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS public.users_profile (
-    id          TEXT        PRIMARY KEY, -- Matches auth.users.id or demo user ID
-    email       TEXT        UNIQUE,
-    full_name   TEXT,
-    role        TEXT        DEFAULT 'student' CHECK (role IN ('student', 'parent', 'counselor')),
-    created_at  TIMESTAMPTZ DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ DEFAULT NOW()
+    id                   TEXT        PRIMARY KEY, -- Matches auth.users.id or demo user ID
+    email                TEXT        UNIQUE,
+    full_name            TEXT,
+    role                 TEXT        DEFAULT 'student' CHECK (role IN ('student', 'parent', 'counselor')),
+    is_onboarded         BOOLEAN     DEFAULT false,
+    college              TEXT        DEFAULT '',
+    major                TEXT        DEFAULT '',
+    chronotype           TEXT        DEFAULT 'intermediate',
+    default_commute_mins INTEGER     DEFAULT 30,
+    default_commute_mode TEXT        DEFAULT 'seated',
+    typical_campus_hours NUMERIC     DEFAULT 4.0,
+    typical_chore_hours  NUMERIC     DEFAULT 1.0,
+    typical_sleep_quality TEXT       DEFAULT 'fair',
+    sensory_sensitivity  TEXT        DEFAULT 'medium',
+    created_at           TIMESTAMPTZ DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Idempotent column additions for existing installations
+ALTER TABLE public.users_profile ADD COLUMN IF NOT EXISTS is_onboarded BOOLEAN DEFAULT false;
+ALTER TABLE public.users_profile ADD COLUMN IF NOT EXISTS college TEXT DEFAULT '';
+ALTER TABLE public.users_profile ADD COLUMN IF NOT EXISTS major TEXT DEFAULT '';
+ALTER TABLE public.users_profile ADD COLUMN IF NOT EXISTS chronotype TEXT DEFAULT 'intermediate';
+ALTER TABLE public.users_profile ADD COLUMN IF NOT EXISTS default_commute_mins INTEGER DEFAULT 30;
+ALTER TABLE public.users_profile ADD COLUMN IF NOT EXISTS default_commute_mode TEXT DEFAULT 'seated';
+ALTER TABLE public.users_profile ADD COLUMN IF NOT EXISTS typical_campus_hours NUMERIC DEFAULT 4.0;
+ALTER TABLE public.users_profile ADD COLUMN IF NOT EXISTS typical_chore_hours NUMERIC DEFAULT 1.0;
+ALTER TABLE public.users_profile ADD COLUMN IF NOT EXISTS typical_sleep_quality TEXT DEFAULT 'fair';
+ALTER TABLE public.users_profile ADD COLUMN IF NOT EXISTS sensory_sensitivity TEXT DEFAULT 'medium';
 
 CREATE INDEX IF NOT EXISTS idx_users_profile_email ON public.users_profile (email);
 ALTER TABLE public.users_profile ENABLE ROW LEVEL SECURITY;

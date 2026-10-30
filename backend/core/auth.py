@@ -137,10 +137,10 @@ def get_profile(user_id: str) -> dict:
         return {"status": "error", "error": str(e)}
 
 
-def update_profile(user_id: str, full_name: Optional[str] = None) -> dict:
+def update_profile(user_id: str, full_name: Optional[str] = None, **kwargs) -> dict:
     """Update profile fields in users_profile."""
     try:
-        updates = {}
+        updates = {k: v for k, v in kwargs.items() if v is not None}
         if full_name is not None:
             updates["full_name"] = full_name
         if not updates:

@@ -197,6 +197,15 @@ export async function calibrateEnergy(data) {
   });
 }
 
+/** Submit first-time student onboarding setup */
+export async function submitOnboarding(data) {
+  return request("/api/user/onboarding", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
 /** Parse an ICS calendar string */
 export async function parseICS(icsContent) {
   return request("/api/timetable/ics", {
