@@ -147,6 +147,7 @@ class EnergyCalibrationRequest(BaseModel):
     user_id: str
     commute_minutes: int = 30
     commute_mode: str = "seated"  # "crowded", "seated", "walk", "active", "car", "wfh"
+    commute_legs: Optional[List[Dict[str, Any]]] = None
     campus_hours: float = 3.0
     has_intense_lab: bool = False
     chore_hours: float = 1.0
@@ -162,6 +163,7 @@ class OnboardingRequest(BaseModel):
     chronotype: str = "intermediate"  # "morning", "intermediate", "evening"
     commute_minutes: int = 30
     commute_mode: str = "seated"
+    commute_legs: Optional[List[Dict[str, Any]]] = None
     campus_hours: float = 4.0
     has_intense_lab: bool = False
     chore_hours: float = 1.0
@@ -478,6 +480,7 @@ async def api_user_onboarding(request: OnboardingRequest):
         user_id=user_id,
         commute_minutes=request.commute_minutes,
         commute_mode=request.commute_mode,
+        commute_legs=request.commute_legs,
         campus_hours=request.campus_hours,
         has_intense_lab=request.has_intense_lab,
         chore_hours=request.chore_hours,
@@ -1035,8 +1038,22 @@ async def api_calibrate_energy(request: EnergyCalibrationRequest):
     user_id = request.user_id
     base_spoons = 12.0
 
-    # 1. Commute Cost
-    if request.commute_mode == "wfh":
+    # 1. Commute Cost (Supports multi-leg: train + bus + walk, up to 8+ hours)
+    commute_legs_desc = []
+    if request.commute_legs and len(request.commute_legs) > 0:
+        commute_cost = 0.0
+        total_mins_each_way = 0
+        for leg in request.commute_legs:
+            mins = float(leg.get("minutes", 0))
+            lmode = leg.get("mode", "seated")
+            label = leg.get("label", lmode.title())
+            if mins > 0:
+                total_mins_each_way += mins
+                leg_cost = compute_commute_cost(mins * 2, lmode)  # roundtrip cost
+                commute_cost += leg_cost
+                commute_legs_desc.append(f"{int(mins)}m {label}")
+        commute_cost = round(commute_cost, 2)
+    elif request.commute_mode == "wfh":
         commute_cost = 0.0
     else:
         commute_cost = round(compute_commute_cost(request.commute_minutes * 2, request.commute_mode), 2)
@@ -1092,10 +1109,18 @@ async def api_calibrate_energy(request: EnergyCalibrationRequest):
     ]
 
     if commute_cost > 0:
+        if commute_legs_desc:
+            total_commute_hours = round((sum(float(l.get("minutes", 0)) for l in (request.commute_legs or [])) * 2) / 60, 1)
+            legs_text = " + ".join(commute_legs_desc)
+            desc = f"{total_commute_hours}h roundtrip ({legs_text})"
+        else:
+            total_commute_hours = round((request.commute_minutes * 2) / 60, 1)
+            desc = f"{total_commute_hours}h roundtrip ({request.commute_minutes * 2}m, {request.commute_mode.title()} transit)"
+
         why_factors.append({
             "label": "Transit & Commute",
             "delta": -commute_cost,
-            "plain_text": f"{request.commute_minutes * 2}m daily ({request.commute_mode.title()} transit)",
+            "plain_text": desc,
         })
 
     if campus_cost > 0:

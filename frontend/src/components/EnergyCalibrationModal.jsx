@@ -12,6 +12,9 @@ import {
   CheckCircle2,
   Check,
   UtensilsCrossed,
+  Plus,
+  Trash2,
+  Layers,
 } from 'lucide-react';
 import { calibrateEnergy } from '../api';
 
@@ -23,6 +26,13 @@ export default function EnergyCalibrationModal({
 }) {
   const [commuteMinutes, setCommuteMinutes] = useState(30);
   const [commuteMode, setCommuteMode] = useState('crowded');
+  const [useMultiLeg, setUseMultiLeg] = useState(false);
+  const [commuteLegs, setCommuteLegs] = useState([
+    { id: 1, label: 'Local Train / Metro', mode: 'crowded', minutes: 60, icon: '🚆' },
+    { id: 2, label: 'BEST Bus', mode: 'seated', minutes: 25, icon: '🚌' },
+    { id: 3, label: 'Walking to Campus', mode: 'walk', minutes: 15, icon: '🚶' },
+  ]);
+
   const [campusHours, setCampusHours] = useState(4.0);
   const [hasIntenseLab, setHasIntenseLab] = useState(false);
   const [choreHours, setChoreHours] = useState(1.0);
@@ -30,6 +40,115 @@ export default function EnergyCalibrationModal({
   const [sensoryLoad, setSensoryLoad] = useState('medium');
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+
+  const totalLegMinutes = commuteLegs.reduce(
+    (sum, leg) => sum + (parseInt(leg.minutes, 10) || 0),
+    0
+  );
+
+  const effectiveOneWayMinutes = useMultiLeg
+    ? totalLegMinutes
+    : commuteMode === 'wfh'
+    ? 0
+    : parseInt(commuteMinutes, 10) || 0;
+
+  const effectiveRoundtripMinutes = effectiveOneWayMinutes * 2;
+  const roundtripHoursFormatted = (effectiveRoundtripMinutes / 60).toFixed(1);
+
+  // Compute estimated commute drain in spoons (mirrors backend formula)
+  const computeEstCommuteDrain = () => {
+    if (useMultiLeg) {
+      let cost = 0;
+      commuteLegs.forEach((leg) => {
+        const mins = parseFloat(leg.minutes) || 0;
+        const factor =
+          leg.mode === 'crowded'
+            ? 1.0
+            : leg.mode === 'seated'
+            ? 0.6
+            : leg.mode === 'car'
+            ? 0.8
+            : leg.mode === 'walk'
+            ? 0.3
+            : 0.0;
+        cost += ((mins * 2) / 30.0) * 0.5 * factor;
+      });
+      return Math.round(cost * 10) / 10;
+    }
+    if (commuteMode === 'wfh') return 0;
+    const factor =
+      commuteMode === 'crowded'
+        ? 1.0
+        : commuteMode === 'seated'
+        ? 0.6
+        : commuteMode === 'car'
+        ? 0.8
+        : commuteMode === 'walk'
+        ? 0.3
+        : 0.0;
+    return Math.round(((parseFloat(commuteMinutes) * 2) / 30.0) * 0.5 * factor * 10) / 10;
+  };
+
+  const updateLegMinutes = (index, value) => {
+    setCommuteLegs((prev) => {
+      const copy = [...prev];
+      let val = parseInt(value, 10);
+      if (isNaN(val) || val < 0) val = 0;
+      if (val > 300) val = 300;
+      copy[index] = { ...copy[index], minutes: val };
+      return copy;
+    });
+  };
+
+  const adjustLegMinutes = (index, delta) => {
+    setCommuteLegs((prev) => {
+      const copy = [...prev];
+      let current = parseInt(copy[index].minutes, 10) || 0;
+      let next = Math.max(0, Math.min(300, current + delta));
+      copy[index] = { ...copy[index], minutes: next };
+      return copy;
+    });
+  };
+
+  const updateLegMode = (index, mode) => {
+    const iconMap = {
+      crowded: '🚆',
+      seated: '🚌',
+      walk: '🚶',
+      car: '🛺',
+    };
+    setCommuteLegs((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], mode, icon: iconMap[mode] || '🚗' };
+      return copy;
+    });
+  };
+
+  const updateLegLabel = (index, label) => {
+    setCommuteLegs((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], label };
+      return copy;
+    });
+  };
+
+  const removeLeg = (index) => {
+    if (commuteLegs.length <= 1) return;
+    setCommuteLegs((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const addLeg = () => {
+    setCommuteLegs((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        label: 'Connecting Transit / Auto',
+        mode: 'car',
+        minutes: 15,
+        icon: '🛺',
+      },
+    ]);
+  };
 
   // Close on Escape key
   useEffect(() => {
@@ -50,8 +169,17 @@ export default function EnergyCalibrationModal({
     try {
       const payload = {
         user_id: userId || 'demo_student',
-        commute_minutes: parseInt(commuteMinutes, 10),
-        commute_mode: commuteMode,
+        commute_minutes: effectiveOneWayMinutes,
+        commute_mode: useMultiLeg ? 'crowded' : commuteMode,
+        commute_legs: useMultiLeg
+          ? commuteLegs
+              .filter((l) => (parseInt(l.minutes, 10) || 0) > 0)
+              .map((l) => ({
+                label: l.label,
+                mode: l.mode,
+                minutes: parseInt(l.minutes, 10) || 0,
+              }))
+          : null,
         campus_hours: parseFloat(campusHours),
         has_intense_lab: hasIntenseLab,
         chore_hours: parseFloat(choreHours),
@@ -130,46 +258,230 @@ export default function EnergyCalibrationModal({
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-amber-300 flex items-center gap-2">
                   <Train className="w-4 h-4 text-amber-400" />
-                  1. Transit & Commute (Each Way)
+                  1. Transit & Commute (Supports up to 8h daily)
                 </span>
-                <span className="text-xs font-bold text-white font-mono">
-                  {commuteMode === 'wfh' ? '0 min (WFH)' : `${commuteMinutes} min`}
+                <span className="text-xs font-bold text-amber-400 font-mono">
+                  -{computeEstCommuteDrain()} Spoons
                 </span>
               </div>
 
-              {commuteMode !== 'wfh' && (
-                <input
-                  type="range"
-                  min="0"
-                  max="120"
-                  step="5"
-                  value={commuteMinutes}
-                  onChange={(e) => setCommuteMinutes(e.target.value)}
-                  className="w-full accent-amber-400 h-1.5 bg-slate-700 rounded-lg cursor-pointer"
-                />
+              {/* Mode Switcher */}
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-900/60 rounded-xl border border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setUseMultiLeg(false)}
+                  className={`py-1 px-2 rounded-lg text-[11px] font-semibold transition-all ${
+                    !useMultiLeg
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  ⚡ Single Journey
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUseMultiLeg(true)}
+                  className={`py-1 px-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-all ${
+                    useMultiLeg
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Layers className="w-3 h-3" />
+                  Multi-Leg (Train + Bus + Walk)
+                </button>
+              </div>
+
+              {!useMultiLeg ? (
+                /* Single Journey */
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-300">Travel time each way:</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min="0"
+                        max="300"
+                        value={commuteMode === 'wfh' ? 0 : commuteMinutes}
+                        disabled={commuteMode === 'wfh'}
+                        onChange={(e) => setCommuteMinutes(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                        className="w-16 bg-slate-900 border border-white/10 rounded-lg px-2 py-0.5 text-center font-mono font-bold text-amber-400 text-xs focus:outline-none focus:border-amber-400"
+                      />
+                      <span className="text-slate-400 font-mono text-[11px]">mins</span>
+                    </div>
+                  </div>
+
+                  {commuteMode !== 'wfh' && (
+                    <>
+                      <input
+                        type="range"
+                        min="5"
+                        max="240"
+                        step="5"
+                        value={commuteMinutes}
+                        onChange={(e) => setCommuteMinutes(parseInt(e.target.value, 10))}
+                        className="w-full accent-amber-400 h-1.5 bg-slate-700 rounded-lg cursor-pointer"
+                      />
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                        <span>5m</span>
+                        <span>1h (60m)</span>
+                        <span>2h (120m)</span>
+                        <span>3h (180m)</span>
+                        <span>4h (240m each way = 8h/day)</span>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Quick Presets */}
+                  <div className="flex flex-wrap gap-1">
+                    {[
+                      { label: '30m', mins: 30 },
+                      { label: '60m (1h)', mins: 60 },
+                      { label: '90m (1.5h)', mins: 90 },
+                      { label: '120m (2h)', mins: 120 },
+                      { label: '180m (3h)', mins: 180 },
+                      { label: '240m (4h)', mins: 240 },
+                    ].map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => {
+                          if (commuteMode === 'wfh') setCommuteMode('crowded');
+                          setCommuteMinutes(preset.mins);
+                        }}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-mono border transition-all ${
+                          commuteMinutes === preset.mins && commuteMode !== 'wfh'
+                            ? 'bg-amber-500/20 border-amber-400/50 text-amber-200'
+                            : 'bg-slate-800/80 border-white/5 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 pt-1">
+                    {[
+                      { id: 'crowded', label: '🚆 Train (Packed)' },
+                      { id: 'seated', label: '🚌 Bus (Seated)' },
+                      { id: 'walk', label: '🚶 Walk / Cycle' },
+                      { id: 'car', label: '🚗 Car / Bike' },
+                      { id: 'wfh', label: '🏠 WFH / Campus' },
+                    ].map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setCommuteMode(m.id)}
+                        className={`py-1.5 px-2 rounded-xl text-[11px] font-medium border text-center transition-all ${
+                          commuteMode === m.id
+                            ? 'bg-amber-500/20 border-amber-500 text-amber-200 font-semibold'
+                            : 'bg-slate-800/80 border-white/5 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                /* Multi-Leg Breakdown */
+                <div className="space-y-2.5">
+                  <div className="space-y-2">
+                    {commuteLegs.map((leg, idx) => (
+                      <div
+                        key={leg.id || idx}
+                        className="p-2.5 rounded-xl bg-slate-900/60 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                      >
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            <span>{leg.icon}</span>
+                            <input
+                              type="text"
+                              value={leg.label}
+                              onChange={(e) => updateLegLabel(idx, e.target.value)}
+                              className="bg-transparent text-[11px] font-semibold text-white border-b border-white/10 focus:border-amber-400 focus:outline-none px-1 w-36"
+                              placeholder="Leg name"
+                            />
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            {[
+                              { id: 'crowded', label: 'Packed' },
+                              { id: 'seated', label: 'Seated' },
+                              { id: 'walk', label: 'Walk' },
+                              { id: 'car', label: 'Cab' },
+                            ].map((opt) => (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => updateLegMode(idx, opt.id)}
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-medium border transition-all ${
+                                  leg.mode === opt.id
+                                    ? 'bg-amber-500/20 border-amber-400/60 text-amber-200'
+                                    : 'bg-slate-800 border-white/5 text-slate-400'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 self-end sm:self-center">
+                          <button
+                            type="button"
+                            onClick={() => adjustLegMinutes(idx, -15)}
+                            className="w-6 h-6 rounded bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center text-xs font-bold"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min="0"
+                            max="240"
+                            value={leg.minutes}
+                            onChange={(e) => updateLegMinutes(idx, e.target.value)}
+                            className="w-12 bg-slate-950 border border-white/10 rounded px-1 py-0.5 text-center font-mono font-bold text-amber-400 text-xs focus:outline-none focus:border-amber-400"
+                          />
+                          <span className="text-[10px] text-slate-400 font-mono">m</span>
+                          <button
+                            type="button"
+                            onClick={() => adjustLegMinutes(idx, 15)}
+                            className="w-6 h-6 rounded bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center text-xs font-bold"
+                          >
+                            +
+                          </button>
+
+                          {commuteLegs.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeLeg(idx)}
+                              className="w-6 h-6 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 flex items-center justify-center transition-colors ml-1"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={addLeg}
+                    className="w-full py-1.5 rounded-lg border border-dashed border-white/15 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <Plus className="w-3 h-3 text-amber-400" />
+                    Add Connecting Leg (e.g. Bus, Walking, Rickshaw)
+                  </button>
+                </div>
               )}
 
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 pt-1">
-                {[
-                  { id: 'crowded', label: '🚆 Train (Packed)' },
-                  { id: 'seated', label: '🚌 Bus (Seated)' },
-                  { id: 'walk', label: '🚶 Walk / Cycle' },
-                  { id: 'car', label: '🚗 Car / Bike' },
-                  { id: 'wfh', label: '🏠 WFH / Campus' },
-                ].map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setCommuteMode(m.id)}
-                    className={`py-1.5 px-2 rounded-xl text-[11px] font-medium border text-center transition-all ${
-                      commuteMode === m.id
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-200 font-semibold'
-                        : 'bg-slate-800/80 border-white/5 text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    {m.label}
-                  </button>
-                ))}
+              {/* Summary Pill */}
+              <div className="flex items-center justify-between text-[11px] px-3 py-1.5 rounded-xl bg-slate-900/60 border border-white/5 font-mono text-slate-400">
+                <span>One-way: <strong className="text-white">{effectiveOneWayMinutes}m</strong></span>
+                <span>Roundtrip: <strong className="text-amber-300">{roundtripHoursFormatted}h ({effectiveRoundtripMinutes}m)</strong></span>
+                <span>Drain: <strong className="text-amber-400">-{computeEstCommuteDrain()} spoons</strong></span>
               </div>
             </div>
 
