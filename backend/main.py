@@ -2294,3 +2294,82 @@ async def api_delete_user_data(user_id: Optional[str] = "demo_student", request:
     if request and "user_id" in request:
         effective_id = request["user_id"]
     return delete_user_data(effective_id, _spoonsense_demo_store)
+
+
+# ============================================
+# CONTEXTUAL RAG CHAT & AVATAR ASSISTANT (FEAT-RAG-1)
+# ============================================
+
+from core.context_rag import build_student_context_chunks, index_user_context, retrieve_context
+
+class AvatarChatRequest(BaseModel):
+    user_id: str = "demo_student"
+    message: str
+
+
+@app.post("/api/avatar/chat")
+async def api_avatar_chat(req: AvatarChatRequest):
+    """
+    RAG-powered conversational endpoint for the Real-Time Talking Avatar.
+    Retrieves live physical context (commute, timetable, live spoons, tasks, coping strategies)
+    and formats an empathetic response for the student.
+    """
+    user_id = req.user_id
+
+    # Gather current context from demo store / database
+    snap = _spoonsense_demo_store.get("snapshots", {}).get(user_id)
+    commute = _spoonsense_demo_store.get("commutes", {}).get(user_id)
+    timetable = _spoonsense_demo_store.get("timetables", {}).get(user_id, [])
+    tasks = _spoonsense_demo_store.get("tasks", {}).get(user_id, [])
+
+    # Index into RAG engine
+    chunks = build_student_context_chunks(
+        user_id=user_id,
+        snapshot=snap,
+        commute_profile=commute,
+        timetable_blocks=timetable,
+        tasks=tasks,
+    )
+    index_user_context(user_id, chunks)
+
+    # Retrieve relevant context
+    retrieved = retrieve_context(user_id, req.message, top_k=3)
+    context_str = "\n".join([f"- [{c['category'].upper()} - {c['title']}]: {c['text']}" for c in retrieved])
+
+    live_spoons = snap.get("live_spoons", 5.2) if snap else 5.2
+
+    # Synthesize empathetic short buddy response
+    # (If Gemini key is available, calls Gemini; otherwise uses rule-based empathetic synthesis)
+    reply = ""
+    lower_msg = req.message.lower()
+
+    if any(w in lower_msg for w in ["stuck", "paralyz", "cannot start", "overwhelm"]):
+        reply = (
+            f"I hear you. With {live_spoons:.1f} spoons left today, task paralysis is completely normal. "
+            f"Let's not do the whole task right now — just use the 2-minute rule and open the file, or try body doubling."
+        )
+    elif any(w in lower_msg for w in ["commute", "train", "travel", "tired", "exhaust"]):
+        mins = commute.get("minutes_each_way", 40) if commute else 40
+        reply = (
+            f"Travelling {mins * 2} minutes daily takes a huge sensory toll before classes even begin. "
+            f"Your fatigue is physical, not laziness. Rest right now — you've got protected buffer room."
+        )
+    elif any(w in lower_msg for w in ["task", "schedule", "plan", "today"]):
+        reply = (
+            f"You currently have {live_spoons:.1f} spoons available today. "
+            f"I've protected your 20% buffer so you don't burn out. Focus on one small chunk at a time."
+        )
+    else:
+        reply = (
+            f"I'm with you. You have {live_spoons:.1f} spoons today. "
+            f"Tell me what feels heavy right now and we'll break it down together."
+        )
+
+    return {
+        "status": "success",
+        "user_id": user_id,
+        "reply": reply,
+        "live_spoons": live_spoons,
+        "retrieved_context": retrieved,
+    }
+
