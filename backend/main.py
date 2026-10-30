@@ -2301,10 +2301,38 @@ async def api_delete_user_data(user_id: Optional[str] = "demo_student", request:
 # ============================================
 
 from core.context_rag import build_student_context_chunks, index_user_context, retrieve_context
+import requests
 
 class AvatarChatRequest(BaseModel):
     user_id: str = "demo_student"
     message: str
+
+
+@app.get("/api/avatar/token")
+async def api_avatar_token():
+    """
+    Exchanges AZURE_SPEECH_KEY for a short-lived STS authorization token.
+    Allows frontend WebRTC to connect to Azure without exposing secret keys.
+    """
+    speech_key = os.getenv("AZURE_SPEECH_KEY", "").strip()
+    speech_region = os.getenv("AZURE_SPEECH_REGION", "eastus").strip()
+
+    if not speech_key:
+        return {"status": "mock", "token": None, "region": speech_region}
+
+    try:
+        fetch_token_url = f"https://{speech_region}.api.cognitive.microsoft.com/sts/v1.0/issueToken"
+        headers = {
+            "Ocp-Apim-Subscription-Key": speech_key,
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        res = requests.post(fetch_token_url, headers=headers, timeout=5)
+        if res.status_code == 200:
+            return {"status": "success", "token": res.text, "region": speech_region}
+        else:
+            return {"status": "error", "detail": res.text, "token": None, "region": speech_region}
+    except Exception as e:
+        return {"status": "error", "detail": str(e), "token": None, "region": speech_region}
 
 
 @app.post("/api/avatar/chat")
