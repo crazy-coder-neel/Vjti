@@ -7,6 +7,9 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 export default function AzureAvatarModal({ isOpen, onClose, userId = 'demo_student', snapshot = null }) {
   const videoRef = useRef(null);
+  const audioRef = useRef(null);
+  const sessionRef = useRef(null);
+
   const [synthesizer, setSynthesizer] = useState(null);
   const [inputText, setInputText] = useState('');
   const [status, setStatus] = useState('Connecting to Azure WebRTC...');
@@ -20,12 +23,35 @@ export default function AzureAvatarModal({ isOpen, onClose, userId = 'demo_stude
     },
   ]);
 
+  const cleanup = () => {
+    const session = sessionRef.current;
+    sessionRef.current = null;
+    try {
+      session?.avatar?.close();
+    } catch (e) {
+      /* ignore */
+    }
+    try {
+      session?.peer?.close();
+    } catch (e) {
+      /* ignore */
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+    if (audioRef.current) audioRef.current.srcObject = null;
+    setSynthesizer(null);
+    setIsConnected(false);
+  };
+
   const initAvatarSession = async () => {
+    cleanup();
     setIsConnecting(true);
     setStatus('Requesting Azure credentials...');
 
+    const session = {};
+    sessionRef.current = session;
+
     try {
-      // 1. Fetch short-lived token from backend
+      // 1. Fetch short-lived token and WebRTC relay credentials from backend
       const res = await fetch(`${API_BASE}/api/avatar/token`);
       const data = await res.json();
 
@@ -43,30 +69,43 @@ export default function AzureAvatarModal({ isOpen, onClose, userId = 'demo_stude
       speechConfig.speechSynthesisVoiceName = 'en-US-JennyNeural';
 
       // 3. Configure Avatar (Character "lisa", style "casual-sitting")
-      const avatarConfig = new SpeechSDK.AvatarConfig('lisa', 'casual-sitting', SpeechSDK.MediaStreamFormat.AudioVideo);
-
+      const avatarConfig = new SpeechSDK.AvatarConfig('lisa', 'casual-sitting');
       const avatarSynth = new SpeechSDK.AvatarSynthesizer(speechConfig, avatarConfig);
+      session.avatar = avatarSynth;
 
-      avatarSynth.avatarConnected = () => {
-        setStatus('Avatar Live & Connected via WebRTC');
-        setIsConnected(true);
-        setIsConnecting(false);
-      };
+      // 4. Set up RTCPeerConnection with Azure ICE relay credentials
+      const peer = new RTCPeerConnection({ iceServers: data.iceServers || [] });
+      session.peer = peer;
 
-      avatarSynth.videoStreamReceived = (s, e) => {
-        if (videoRef.current && e.mediaStream) {
-          videoRef.current.srcObject = e.mediaStream;
-          videoRef.current.play().catch(console.error);
+      peer.ontrack = (event) => {
+        const element = event.track.kind === 'video' ? videoRef.current : audioRef.current;
+        if (element) {
+          element.srcObject = new MediaStream([event.track]);
+          element.play?.().catch(() => {});
         }
       };
 
-      await avatarSynth.startSynthesizingAsync();
+      peer.addTransceiver('video', { direction: 'sendrecv' });
+      peer.addTransceiver('audio', { direction: 'sendrecv' });
+
+      // 5. Connect avatar WebRTC stream
+      const result = await avatarSynth.startAvatarAsync(peer);
+
+      if (sessionRef.current !== session) return;
+
+      if (result.reason === SpeechSDK.ResultReason.Canceled) {
+        throw new Error(result.errorDetails || 'Avatar connection failed');
+      }
+
       setSynthesizer(avatarSynth);
+      setStatus('Avatar Live & Connected via WebRTC');
+      setIsConnected(true);
     } catch (err) {
       console.error('Azure Avatar Init Error:', err);
-      setStatus('Failed to connect to Azure. Ready in local conversational mode.');
-      setIsConnecting(false);
+      setStatus('Azure Avatar offline: ' + (err.message || String(err)) + '. Voice fallback active.');
       setIsConnected(true);
+    } finally {
+      setIsConnecting(false);
     }
   };
 
@@ -74,17 +113,10 @@ export default function AzureAvatarModal({ isOpen, onClose, userId = 'demo_stude
     if (isOpen) {
       initAvatarSession();
     } else {
-      if (synthesizer) {
-        try {
-          synthesizer.close();
-        } catch {
-          /* ignore */
-        }
-        setSynthesizer(null);
-      }
-      setIsConnected(false);
+      cleanup();
       setIsConnecting(false);
     }
+    return () => cleanup();
   }, [isOpen]);
 
   const handleSendMessage = async (e) => {
@@ -166,6 +198,7 @@ export default function AzureAvatarModal({ isOpen, onClose, userId = 'demo_stude
             playsInline
             className="w-full h-full object-cover"
           />
+          <audio ref={audioRef} autoPlay />
 
           {/* Placeholder when Azure stream is connecting or in mock mode */}
           {(!synthesizer || isConnecting) && (

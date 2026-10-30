@@ -2309,30 +2309,62 @@ class AvatarChatRequest(BaseModel):
 
 
 @app.get("/api/avatar/token")
+@app.get("/api/avatar-session")
 async def api_avatar_token():
     """
-    Exchanges AZURE_SPEECH_KEY for a short-lived STS authorization token.
-    Allows frontend WebRTC to connect to Azure without exposing secret keys.
+    Exchanges AZURE_SPEECH_KEY for a short-lived STS authorization token
+    AND fetches Azure TTS Avatar WebRTC relay credentials (TURN/STUN ICE servers).
+    Allows frontend WebRTC to connect directly to Azure Avatar without exposing keys.
     """
     speech_key = os.getenv("AZURE_SPEECH_KEY", "").strip()
     speech_region = os.getenv("AZURE_SPEECH_REGION", "eastus").strip()
 
     if not speech_key:
-        return {"status": "mock", "token": None, "region": speech_region}
+        return {"status": "mock", "token": None, "region": speech_region, "iceServers": []}
 
     try:
-        fetch_token_url = f"https://{speech_region}.api.cognitive.microsoft.com/sts/v1.0/issueToken"
         headers = {
             "Ocp-Apim-Subscription-Key": speech_key,
-            "Content-Type": "application/x-www-form-urlencoded",
         }
-        res = requests.post(fetch_token_url, headers=headers, timeout=5)
-        if res.status_code == 200:
-            return {"status": "success", "token": res.text, "region": speech_region}
+        # 1. Fetch STS Token
+        sts_url = f"https://{speech_region}.api.cognitive.microsoft.com/sts/v1.0/issueToken"
+        sts_res = requests.post(sts_url, headers={**headers, "Content-Type": "application/x-www-form-urlencoded"}, timeout=5)
+
+        # 2. Fetch Avatar WebRTC Relay Credentials (ICE TURN/STUN servers)
+        relay_url = f"https://{speech_region}.tts.speech.microsoft.com/cognitiveservices/avatar/relay/token/v1"
+        relay_res = requests.get(relay_url, headers=headers, timeout=5)
+
+        token = sts_res.text.strip() if sts_res.status_code == 200 else None
+        ice_servers = []
+
+        if relay_res.status_code == 200:
+            relay_data = relay_res.json()
+            if relay_data.get("Urls") and relay_data.get("Username") and relay_data.get("Password"):
+                ice_servers = [
+                    {
+                        "urls": relay_data["Urls"],
+                        "username": relay_data["Username"],
+                        "credential": relay_data["Password"],
+                    }
+                ]
+
+        if token:
+            return {
+                "status": "success",
+                "token": token,
+                "region": speech_region,
+                "iceServers": ice_servers,
+            }
         else:
-            return {"status": "error", "detail": res.text, "token": None, "region": speech_region}
+            return {
+                "status": "error",
+                "detail": f"Azure STS failed: {sts_res.status_code} - {sts_res.text}",
+                "token": None,
+                "region": speech_region,
+                "iceServers": [],
+            }
     except Exception as e:
-        return {"status": "error", "detail": str(e), "token": None, "region": speech_region}
+        return {"status": "error", "detail": str(e), "token": None, "region": speech_region, "iceServers": []}
 
 
 @app.post("/api/avatar/chat")
