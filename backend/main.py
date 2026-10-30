@@ -2346,6 +2346,62 @@ def _get_azure_speech_credentials():
     }
 
 
+class AzureConfigPayload(BaseModel):
+    speech_key: str
+    speech_region: Optional[str] = "eastus"
+    speech_endpoint: Optional[str] = None
+    avatar_character: Optional[str] = "Celine"
+
+
+@app.post("/api/avatar/configure")
+async def api_avatar_configure(payload: AzureConfigPayload):
+    """
+    Saves and activates Azure Speech credentials in runtime and backend/.env.
+    """
+    key = payload.speech_key.strip()
+    region = payload.speech_region.strip() if payload.speech_region else "eastus"
+    endpoint = payload.speech_endpoint.strip() if payload.speech_endpoint else f"https://{region}.api.cognitive.microsoft.com"
+    character = payload.avatar_character.strip() if payload.avatar_character else "Celine"
+
+    os.environ["SPEECH_KEY"] = key
+    os.environ["AZURE_SPEECH_KEY"] = key
+    os.environ["SPEECH_REGION"] = region
+    os.environ["AZURE_SPEECH_REGION"] = region
+    os.environ["SPEECH_ENDPOINT"] = endpoint
+    os.environ["AZURE_SPEECH_ENDPOINT"] = endpoint
+    os.environ["AVATAR_CHARACTER"] = character
+    os.environ["AZURE_AVATAR_CHARACTER"] = character
+
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    try:
+        content = ""
+        if os.path.exists(env_path):
+            with open(env_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+        updates = {
+            "SPEECH_KEY": key,
+            "AZURE_SPEECH_KEY": key,
+            "SPEECH_REGION": region,
+            "AZURE_SPEECH_REGION": region,
+            "SPEECH_ENDPOINT": endpoint,
+            "AVATAR_CHARACTER": character,
+        }
+        for k, v in updates.items():
+            pattern = rf"^{k}=.*$"
+            if re.search(pattern, content, flags=re.MULTILINE):
+                content = re.sub(pattern, f"{k}={v}", content, flags=re.MULTILINE)
+            else:
+                content += f"\n{k}={v}"
+
+        with open(env_path, "w", encoding="utf-8") as f:
+            f.write(content.strip() + "\n")
+    except Exception as e:
+        logger.warning(f"Could not persist Azure config to .env: {e}")
+
+    return {"status": "success", "message": "Credentials updated", "region": region, "character": character}
+
+
 @app.get("/api/avatar/token")
 @app.get("/api/avatar-session")
 async def api_avatar_token():
