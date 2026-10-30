@@ -2301,34 +2301,77 @@ async def api_delete_user_data(user_id: Optional[str] = "demo_student", request:
 # ============================================
 
 from core.context_rag import build_student_context_chunks, index_user_context, retrieve_context
+import re
 import requests
+import uuid
 
 class AvatarChatRequest(BaseModel):
     user_id: str = "demo_student"
     message: str
 
 
+def _get_azure_speech_credentials():
+    """
+    Resolves Azure Speech credentials from environment variables supporting both
+    official formats:
+    - SPEECH_KEY / AZURE_SPEECH_KEY
+    - SPEECH_ENDPOINT / AZURE_SPEECH_ENDPOINT
+    - SPEECH_REGION / AZURE_SPEECH_REGION
+    - AVATAR_CHARACTER / AZURE_AVATAR_CHARACTER
+    """
+    key = os.getenv("SPEECH_KEY", "").strip() or os.getenv("AZURE_SPEECH_KEY", "").strip()
+    endpoint = os.getenv("SPEECH_ENDPOINT", "").strip() or os.getenv("AZURE_SPEECH_ENDPOINT", "").strip()
+    region = os.getenv("SPEECH_REGION", "").strip() or os.getenv("AZURE_SPEECH_REGION", "").strip()
+    character = os.getenv("AVATAR_CHARACTER", "").strip() or os.getenv("AZURE_AVATAR_CHARACTER", "").strip() or "Celine"
+
+    # Extract region from endpoint if region not set explicitly
+    if not region and endpoint:
+        match = re.search(r"https?://([a-z0-9-]+)\.api\.cognitive\.microsoft\.com", endpoint)
+        if match:
+            region = match.group(1)
+        else:
+            region = "eastus"
+
+    if not region:
+        region = "eastus"
+
+    if not endpoint:
+        endpoint = f"https://{region}.api.cognitive.microsoft.com"
+
+    return {
+        "key": key,
+        "endpoint": endpoint.rstrip("/"),
+        "region": region,
+        "character": character,
+    }
+
+
 @app.get("/api/avatar/token")
 @app.get("/api/avatar-session")
 async def api_avatar_token():
     """
-    Exchanges AZURE_SPEECH_KEY for a short-lived STS authorization token
+    Exchanges Azure Speech credentials for a short-lived STS authorization token
     AND fetches Azure TTS Avatar WebRTC relay credentials (TURN/STUN ICE servers).
     Allows frontend WebRTC to connect directly to Azure Avatar without exposing keys.
     """
-    speech_key = os.getenv("AZURE_SPEECH_KEY", "").strip()
-    speech_region = os.getenv("AZURE_SPEECH_REGION", "eastus").strip()
+    creds = _get_azure_speech_credentials()
+    speech_key = creds["key"]
+    speech_region = creds["region"]
+    avatar_character = creds["character"]
 
     if not speech_key:
-        return {"status": "mock", "token": None, "region": speech_region, "iceServers": []}
+        return {"status": "mock", "token": None, "region": speech_region, "character": avatar_character, "iceServers": []}
 
     try:
         headers = {
             "Ocp-Apim-Subscription-Key": speech_key,
         }
-        # 1. Fetch STS Token
-        sts_url = f"https://{speech_region}.api.cognitive.microsoft.com/sts/v1.0/issueToken"
+        # 1. Fetch STS Token (try endpoint first, fallback to regional STS)
+        sts_url = f"{creds['endpoint']}/sts/v1.0/issueToken"
         sts_res = requests.post(sts_url, headers={**headers, "Content-Type": "application/x-www-form-urlencoded"}, timeout=5)
+        if sts_res.status_code != 200:
+            alt_sts_url = f"https://{speech_region}.api.cognitive.microsoft.com/sts/v1.0/issueToken"
+            sts_res = requests.post(alt_sts_url, headers={**headers, "Content-Type": "application/x-www-form-urlencoded"}, timeout=5)
 
         # 2. Fetch Avatar WebRTC Relay Credentials (ICE TURN/STUN servers)
         relay_url = f"https://{speech_region}.tts.speech.microsoft.com/cognitiveservices/avatar/relay/token/v1"
@@ -2353,6 +2396,7 @@ async def api_avatar_token():
                 "status": "success",
                 "token": token,
                 "region": speech_region,
+                "character": avatar_character,
                 "iceServers": ice_servers,
             }
         else:
@@ -2361,10 +2405,87 @@ async def api_avatar_token():
                 "detail": f"Azure STS failed: {sts_res.status_code} - {sts_res.text}",
                 "token": None,
                 "region": speech_region,
+                "character": avatar_character,
                 "iceServers": [],
             }
     except Exception as e:
-        return {"status": "error", "detail": str(e), "token": None, "region": speech_region, "iceServers": []}
+        return {"status": "error", "detail": str(e), "token": None, "region": speech_region, "character": avatar_character, "iceServers": []}
+
+
+class BatchAvatarRequest(BaseModel):
+    text: str
+    character: Optional[str] = None
+    voice: Optional[str] = "en-US-Ava:DragonHDLatestNeural"
+
+
+@app.post("/api/avatar/batch-synthesize")
+async def api_batch_synthesize(req: BatchAvatarRequest):
+    """
+    Submits a batch avatar synthesis job using Azure REST API (api-version=2024-08-01).
+    Generates an MP4 video of the avatar speaking the supplied text.
+    """
+    creds = _get_azure_speech_credentials()
+    if not creds["key"]:
+        return {"status": "mock", "job_id": str(uuid.uuid4()), "message": "Azure Speech key not configured in .env"}
+
+    job_id = str(uuid.uuid4())
+    character = req.character or creds["character"] or "Celine"
+    url = f"{creds['endpoint']}/avatar/batchsyntheses/{job_id}?api-version=2024-08-01"
+    headers = {
+        "Content-Type": "application/json",
+        "Ocp-Apim-Subscription-Key": creds["key"],
+    }
+    payload = {
+        "synthesisConfig": {
+            "voice": req.voice,
+        },
+        "customVoices": {},
+        "inputKind": "PlainText",
+        "inputs": [
+            {"content": req.text},
+        ],
+        "avatarConfig": {
+            "talkingAvatarCharacter": character,
+            "talkingAvatarStyle": "",
+            "videoFormat": "mp4",
+            "videoCodec": "h264",
+            "subtitleType": "soft_embedded",
+            "backgroundColor": "#1e1b4bFF",
+        },
+    }
+    try:
+        res = requests.put(url, json=payload, headers=headers, timeout=10)
+        if res.status_code < 400:
+            return {"status": "submitted", "job_id": job_id, "data": res.json()}
+        else:
+            return {"status": "error", "code": res.status_code, "detail": res.text}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+@app.get("/api/avatar/batch-synthesize/{job_id}")
+async def api_get_batch_synthesis(job_id: str):
+    """
+    Polls the status of an Azure batch avatar synthesis job.
+    Returns the output MP4 video URL once synthesis completes ('Succeeded').
+    """
+    creds = _get_azure_speech_credentials()
+    if not creds["key"]:
+        return {"status": "mock", "job_id": job_id, "video_url": None}
+
+    url = f"{creds['endpoint']}/avatar/batchsyntheses/{job_id}?api-version=2024-08-01"
+    headers = {"Ocp-Apim-Subscription-Key": creds["key"]}
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code < 400:
+            data = res.json()
+            status = data.get("status")
+            video_url = data.get("outputs", {}).get("result") if status == "Succeeded" else None
+            return {"status": status, "job_id": job_id, "video_url": video_url, "data": data}
+        else:
+            return {"status": "error", "code": res.status_code, "detail": res.text}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 
 
 @app.post("/api/avatar/chat")

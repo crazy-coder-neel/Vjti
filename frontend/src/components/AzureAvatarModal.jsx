@@ -68,8 +68,10 @@ export default function AzureAvatarModal({ isOpen, onClose, userId = 'demo_stude
       const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(data.token, data.region);
       speechConfig.speechSynthesisVoiceName = 'en-US-JennyNeural';
 
-      // 3. Configure Avatar (Character "lisa", style "casual-sitting")
-      const avatarConfig = new SpeechSDK.AvatarConfig('lisa', 'casual-sitting');
+      // 3. Configure Avatar (supports character from backend e.g. "Celine" or "lisa")
+      const charName = data.character || 'lisa';
+      const charStyle = charName.toLowerCase() === 'lisa' ? 'casual-sitting' : '';
+      const avatarConfig = new SpeechSDK.AvatarConfig(charName, charStyle);
       const avatarSynth = new SpeechSDK.AvatarSynthesizer(speechConfig, avatarConfig);
       session.avatar = avatarSynth;
 
