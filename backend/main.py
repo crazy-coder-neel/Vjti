@@ -2308,6 +2308,9 @@ import uuid
 class AvatarChatRequest(BaseModel):
     user_id: str = "demo_student"
     message: str
+    current_activity: Optional[str] = None
+    current_tab: Optional[str] = None
+    active_task: Optional[str] = None
 
 
 def _get_azure_speech_credentials():
@@ -2548,8 +2551,8 @@ async def api_get_batch_synthesis(job_id: str):
 async def api_avatar_chat(req: AvatarChatRequest):
     """
     RAG-powered conversational endpoint for the Real-Time Talking Avatar.
-    Retrieves live physical context (commute, timetable, live spoons, tasks, coping strategies)
-    and formats an empathetic response for the student.
+    Retrieves live physical context (commute, timetable, live spoons, tasks, coping strategies,
+    and student's current real-time activity) and generates a hyper-contextual response.
     """
     user_id = req.user_id
 
@@ -2567,40 +2570,90 @@ async def api_avatar_chat(req: AvatarChatRequest):
         timetable_blocks=timetable,
         tasks=tasks,
     )
+
+    # Inject real-time user activity into RAG memory
+    if req.current_activity:
+        chunks.append({
+            "category": "live_activity",
+            "title": f"Activity: {req.current_activity}",
+            "text": f"Student is currently engaged in: '{req.current_activity}'. Current view tab: {req.current_tab or 'dashboard'}.",
+            "metadata": {"activity": req.current_activity, "tab": req.current_tab},
+        })
+    if req.active_task:
+        chunks.append({
+            "category": "focus_task",
+            "title": f"Target Task: {req.active_task}",
+            "text": f"Student is actively working on or struggling to start task '{req.active_task}'.",
+            "metadata": {"task": req.active_task},
+        })
+
     index_user_context(user_id, chunks)
 
-    # Retrieve relevant context
-    retrieved = retrieve_context(user_id, req.message, top_k=3)
+    # Retrieve relevant context using semantic query
+    query_text = f"{req.message} {req.current_activity or ''} {req.active_task or ''}".strip()
+    retrieved = retrieve_context(user_id, query_text, top_k=4)
     context_str = "\n".join([f"- [{c['category'].upper()} - {c['title']}]: {c['text']}" for c in retrieved])
 
     live_spoons = snap.get("live_spoons", 5.2) if snap else 5.2
 
-    # Synthesize empathetic short buddy response
-    # (If Gemini key is available, calls Gemini; otherwise uses rule-based empathetic synthesis)
+    # Synthesize response via Gemini (if key configured) or empathetic template RAG engine
     reply = ""
-    lower_msg = req.message.lower()
+    llm_generated = False
+    gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
 
-    if any(w in lower_msg for w in ["stuck", "paralyz", "cannot start", "overwhelm"]):
-        reply = (
-            f"I hear you. With {live_spoons:.1f} spoons left today, task paralysis is completely normal. "
-            f"Let's not do the whole task right now — just use the 2-minute rule and open the file, or try body doubling."
-        )
-    elif any(w in lower_msg for w in ["commute", "train", "travel", "tired", "exhaust"]):
-        mins = commute.get("minutes_each_way", 40) if commute else 40
-        reply = (
-            f"Travelling {mins * 2} minutes daily takes a huge sensory toll before classes even begin. "
-            f"Your fatigue is physical, not laziness. Rest right now — you've got protected buffer room."
-        )
-    elif any(w in lower_msg for w in ["task", "schedule", "plan", "today"]):
-        reply = (
-            f"You currently have {live_spoons:.1f} spoons available today. "
-            f"I've protected your 20% buffer so you don't burn out. Focus on one small chunk at a time."
-        )
-    else:
-        reply = (
-            f"I'm with you. You have {live_spoons:.1f} spoons today. "
-            f"Tell me what feels heavy right now and we'll break it down together."
-        )
+    if gemini_key and not gemini_key.startswith("your_"):
+        try:
+            from google import genai
+            g_client = genai.Client(api_key=gemini_key)
+            prompt = (
+                f"You are Celine, an empathetic neurodivergent-friendly AI study companion on SpoonSense.\n"
+                f"Retrieved student context from RAG memory:\n"
+                f"{context_str}\n\n"
+                f"Student State: {req.current_activity or 'Studying at desk'}\n"
+                f"Student Question: '{req.message}'\n\n"
+                f"Instructions:\n"
+                f"1. Reply in 2-3 spoken, caring sentences (under 45 words) suitable for live audio synthesis.\n"
+                f"2. Explicitly acknowledge their current energy ({live_spoons:.1f} spoons), commute load, or active task.\n"
+                f"3. Offer one immediate low-friction micro-step to unblock inertia."
+            )
+            resp = g_client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+            )
+            if resp and resp.text:
+                reply = resp.text.strip()
+                llm_generated = True
+        except Exception as e:
+            logger.info(f"Gemini call bypassed: {e}")
+
+    # Fallback RAG synthesis engine
+    if not reply:
+        lower_msg = req.message.lower()
+        if req.active_task:
+            reply = f"For '{req.active_task}', let's keep it gentle. With {live_spoons:.1f} spoons available, just do a 2-minute starter without forcing full completion."
+        elif req.current_activity and any(w in req.current_activity.lower() for w in ["commute", "travel", "train", "bus"]):
+            reply = f"You're in transit right now. Travelling takes a huge sensory toll — don't force deep work on the train. Rest your eyes until you arrive."
+        elif any(w in lower_msg for w in ["stuck", "paralyz", "cannot start", "overwhelm"]):
+            reply = (
+                f"I hear you. With {live_spoons:.1f} spoons left today, task paralysis is completely normal. "
+                f"Let's not do the whole task right now — just use the 2-minute rule and open the file, or try body doubling."
+            )
+        elif any(w in lower_msg for w in ["commute", "train", "travel", "tired", "exhaust"]):
+            mins = commute.get("minutes_each_way", 40) if commute else 40
+            reply = (
+                f"Travelling {mins * 2} minutes daily takes a huge sensory toll before classes even begin. "
+                f"Your fatigue is physical, not laziness. Rest right now — you've got protected buffer room."
+            )
+        elif any(w in lower_msg for w in ["task", "schedule", "plan", "today"]):
+            reply = (
+                f"You currently have {live_spoons:.1f} spoons available today. "
+                f"I've protected your 20% buffer so you don't burn out. Focus on one small chunk at a time."
+            )
+        else:
+            reply = (
+                f"I'm with you. You have {live_spoons:.1f} spoons today. "
+                f"Tell me what feels heavy right now and we'll break it down together."
+            )
 
     return {
         "status": "success",
@@ -2608,5 +2661,7 @@ async def api_avatar_chat(req: AvatarChatRequest):
         "reply": reply,
         "live_spoons": live_spoons,
         "retrieved_context": retrieved,
+        "rag_sources": [f"{c['category']}: {c['title']}" for c in retrieved],
+        "llm_grounded": llm_generated,
     }
 

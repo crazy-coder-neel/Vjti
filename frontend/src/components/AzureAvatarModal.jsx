@@ -23,6 +23,7 @@ export default function AzureAvatarModal({ isOpen, onClose, userId = 'demo_stude
   const [avatarCharInput, setAvatarCharInput] = useState('Celine');
   const [isSavingKey, setIsSavingKey] = useState(false);
   const [activeCharacter, setActiveCharacter] = useState('Celine');
+  const [currentActivity, setCurrentActivity] = useState('Studying at desk');
   const [chatLog, setChatLog] = useState([
     {
       sender: 'avatar',
@@ -175,16 +176,28 @@ export default function AzureAvatarModal({ isOpen, onClose, userId = 'demo_stude
     setIsSpeaking(true);
 
     try {
-      // 1. Query RAG Context endpoint
+      // 1. Query RAG Context endpoint with live student activity and view context
       const res = await fetch(`${API_BASE}/api/avatar/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, message: userMsg }),
+        body: JSON.stringify({
+          user_id: userId,
+          message: userMsg,
+          current_activity: currentActivity,
+          current_tab: window.location.pathname,
+        }),
       });
       const data = await res.json();
       const reply = data.reply || "I'm with you. Let's pace your day gently.";
 
-      setChatLog((prev) => [...prev, { sender: 'avatar', text: reply }]);
+      setChatLog((prev) => [
+        ...prev,
+        {
+          sender: 'avatar',
+          text: reply,
+          ragSources: data.rag_sources || [],
+        },
+      ]);
 
       // 2. Speak via Azure Avatar Synthesizer or Fallback Web Speech
       if (synthesizer) {
@@ -359,18 +372,64 @@ export default function AzureAvatarModal({ isOpen, onClose, userId = 'demo_stude
           {chatLog.map((msg, idx) => (
             <div
               key={idx}
-              className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
             >
               <div
-                className={`max-w-[85%] p-2.5 rounded-2xl text-xs leading-relaxed ${
+                className={`max-w-[88%] p-2.5 rounded-2xl text-xs leading-relaxed ${
                   msg.sender === 'user'
                     ? 'bg-violet-600 text-white rounded-br-none'
                     : 'bg-slate-800/80 border border-white/5 text-slate-200 rounded-bl-none'
                 }`}
               >
-                {msg.text}
+                <div>{msg.text}</div>
+                {msg.ragSources && msg.ragSources.length > 0 && (
+                  <div className="mt-1.5 pt-1.5 border-t border-white/10 flex flex-wrap items-center gap-1">
+                    <span className="text-[9px] font-semibold text-emerald-300 flex items-center gap-0.5">
+                      <Sparkles className="w-2.5 h-2.5 text-emerald-400" />
+                      RAG Context:
+                    </span>
+                    {msg.ragSources.slice(0, 2).map((src, sIdx) => (
+                      <span
+                        key={sIdx}
+                        className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-mono"
+                      >
+                        {src}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
+          ))}
+        </div>
+
+        {/* Real-time Context Selector Pills for Pitching RAG */}
+        <div className="flex items-center gap-1.5 py-1.5 overflow-x-auto scrollbar-hide shrink-0 border-t border-white/5">
+          <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-violet-400" />
+            Context:
+          </span>
+          {[
+            { label: '🚆 Train Commute (2hr)', act: 'Travelling 2 hours on crowded local train' },
+            { label: '🧊 Task Paralysis', act: 'Stuck on assignment, reshuffled 3 times' },
+            { label: '📚 Physics Lab', act: 'Heavy practical lab starting at 2 PM' },
+            { label: '⚡ Energy Check', act: 'Low spoons, need gentle pacing' },
+          ].map((preset, pIdx) => (
+            <button
+              key={pIdx}
+              type="button"
+              onClick={() => {
+                setCurrentActivity(preset.act);
+                setInputText(`I am ${preset.act.toLowerCase()}. How should I pace myself?`);
+              }}
+              className={`text-[10px] px-2.5 py-0.5 rounded-full whitespace-nowrap transition-all border ${
+                currentActivity === preset.act
+                  ? 'bg-violet-600/30 text-violet-200 border-violet-500/50'
+                  : 'bg-white/5 text-slate-400 border-white/10 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              {preset.label}
+            </button>
           ))}
         </div>
 
